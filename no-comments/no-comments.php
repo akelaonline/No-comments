@@ -2,7 +2,7 @@
 /**
  * Plugin Name: NO Comments
  * Description: Un toggle simple para habilitar o deshabilitar los comentarios (y pings) en todo el sitio.
- * Version: 1.1.0
+ * Version: 1.1.1
  * Author: Cascade
  * License: GPLv2 or later
  * Text Domain: no-comments
@@ -125,7 +125,10 @@ final class No_Comments_Plugin {
 
         // Ocultar el menú de Comentarios en el admin cuando está deshabilitado
         add_action( 'admin_menu', function () {
+            // Menú principal de Comentarios
             remove_menu_page( 'edit-comments.php' );
+            // Submenú de Ajustes → Comentarios (Discusión)
+            remove_submenu_page( 'options-general.php', 'options-discussion.php' );
         }, 999 );
 
         // Quitar el ícono de comentarios del admin bar
@@ -133,13 +136,18 @@ final class No_Comments_Plugin {
             $wp_admin_bar->remove_node( 'comments' );
         }, 999 );
 
-        // Bloquear acceso directo a la pantalla de Comentarios
+        // Bloquear accesos directos a Comentarios y Discusión
         add_action( 'admin_init', function () {
-            if ( is_admin() && isset( $GLOBALS['pagenow'] ) && $GLOBALS['pagenow'] === 'edit-comments.php' ) {
+            if ( is_admin() && isset( $GLOBALS['pagenow'] ) && in_array( $GLOBALS['pagenow'], [ 'edit-comments.php', 'options-discussion.php' ], true ) ) {
                 wp_safe_redirect( admin_url() );
                 exit;
             }
         }, 1 );
+
+        // Fallback visual por CSS en caso de que otro plugin reordene/añada el menú después
+        add_action( 'admin_head', function () {
+            echo '<style id="no-comments-admin-css">#menu-comments, #adminmenu a[href$="edit-comments.php"], #adminmenu a[href$="options-discussion.php"]{display:none !important;}</style>';
+        } );
     }
 
     public static function reorder_settings_submenu() {

@@ -3,7 +3,7 @@ Contributors: cascade
 Tags: comments, disable comments, discussion
 Tested up to: 6.6
 Requires PHP: 7.2
-Stable tag: 1.1.0
+Stable tag: 1.1.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -37,6 +37,10 @@ Incluye un único interruptor (checkbox) que, al activarse, cierra los comentari
 Sí. Cuando el toggle está activado, el menú de Comentarios desaparece del admin, también el ícono del admin bar, y se bloquea el acceso directo a la pantalla de Comentarios.
 
 == Changelog ==
+
+== 1.1.1 ==
+* Oculta también el submenú Ajustes → Comentarios (Discusión).
+* Bloquea el acceso directo a `options-discussion.php`.
 
 == 1.1.0 ==
 * Oculta el menú de Comentarios y el ícono del admin bar.
