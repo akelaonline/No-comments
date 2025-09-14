@@ -1,0 +1,18 @@
+# Dev environment
+/dev/.env
+/dev/.env.*
+!/dev/.env.example
+/dev/*.log
+
+# OS files
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Packaging artifacts
+*.zip
+
+# WordPress debug log (if mapped locally)
+wp-content/debug.log

@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [ "**" ]
+  pull_request:
+    branches: [ "**" ]
+
+jobs:
+  phpcs:
+    name: PHPCS (WPCS / PSR-12)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php: [ '7.4', '8.0', '8.2' ]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+
+      - name: Install Composer dependencies
+        run: composer install --prefer-dist --no-progress --no-interaction
+
+      - name: Run PHPCS
+        run: vendor/bin/phpcs -q || vendor/bin/phpcs --report=full

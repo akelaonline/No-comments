@@ -1,0 +1,82 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: NO Comments 1.10.1\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-09-13 22:46+0000\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: Cascade\n"
+"X-Domain: no-comments\n"
+
+#: no-comments.php:90
+msgid "Cerrar comentarios y pings en todo el sitio"
+msgstr ""
+
+#: no-comments.php:92
+msgid "Ajustes"
+msgstr ""
+
+#: no-comments.php:145
+msgid "Disable Comments"
+msgstr ""
+
+#: no-comments.php:146
+msgid "Delete Comments"
+msgstr ""
+
+#: no-comments.php:180
+msgid "Comentarios deshabilitados globalmente"
+msgstr ""
+
+#: no-comments.php:181
+msgid "Comentarios habilitados (comportamiento por defecto)"
+msgstr ""
+
+#: no-comments.php:348
+msgid "Estas acciones son destructivas. Te sugerimos hacer un respaldo antes de continuar."
+msgstr ""
+
+#: no-comments.php:363
+msgid "Eliminar solo Spam"
+msgstr ""
+
+#: no-comments.php:364
+msgid "Eliminar Pendientes (moderación)"
+msgstr ""
+
+#: no-comments.php:365
+msgid "Vaciar Papelera"
+msgstr ""
+
+#: no-comments.php:366
+msgid "Eliminar TODOS los comentarios"
+msgstr ""
+
+#: no-comments.php:369
+msgid "Simulación (dry‑run): solo calcula y no borra"
+msgstr ""
+
+#: no-comments.php:370
+msgid "Escribe DELETE para confirmar"
+msgstr ""
+
+#: no-comments.php:331
+msgid "APIs"
+msgstr ""
+
+#: no-comments.php:133
+msgid "Deshabilitar endpoint REST de comentarios (wp/v2/comments)"
+msgstr ""
+
+#: no-comments.php:136
+msgid "Deshabilitar XML‑RPC (método wp.newComment)"
+msgstr ""
+
+#: no-comments.php:138
+msgid "Recomendado mantenerlos activos (marcados) para mayor seguridad."
+msgstr ""
+
+#: no-comments.php:205
+msgid "Los comentarios están cerrados en todo el sitio."
+msgstr ""
