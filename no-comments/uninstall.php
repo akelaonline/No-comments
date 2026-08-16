@@ -1,6 +1,6 @@
 <?php
 /**
- * Uninstall for NO Comments
+ * Uninstall for NO Comments.
  */
 
 if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
@@ -15,7 +15,14 @@ $option_keys = [
 ];
 
 if ( is_multisite() ) {
-    $site_ids = get_sites( [ 'fields' => 'ids' ] );
+    // number => 0 is required here: get_sites() otherwise defaults to 100 sites.
+    $site_ids = get_sites(
+        [
+            'fields' => 'ids',
+            'number' => 0,
+        ]
+    );
+
     foreach ( $site_ids as $site_id ) {
         switch_to_blog( (int) $site_id );
         foreach ( $option_keys as $key ) {
@@ -23,7 +30,7 @@ if ( is_multisite() ) {
         }
         restore_current_blog();
     }
-    // Opciones de red
+
     delete_site_option( 'no_comments_network_settings' );
 } else {
     foreach ( $option_keys as $key ) {
