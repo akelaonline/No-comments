@@ -1,98 +1,128 @@
-# Contributing – NO Comments (WordPress)
+# Contributing to NO Comments
 
-Gracias por contribuir. Este repositorio busca mantener un alto estándar de calidad, seguridad y DX.
+Thanks for helping improve NO Comments. The project deliberately keeps a narrow scope: disable WordPress comments cleanly, preserve intentional WooCommerce reviews, and provide safe cleanup/automation tools.
 
-## Requisitos
+## Before opening a change
 
-- PHP 7.4+ (probado también en 8.0 y 8.2)
-- Composer
-- WordPress 6.6+
-- Docker (opcional, carpeta `dev/` ya provista)
+Good contributions include:
 
-## Setup local
+- reproducible bugs;
+- WordPress/PHP compatibility fixes;
+- Multisite edge cases;
+- WooCommerce review compatibility fixes;
+- accessibility improvements;
+- safer cleanup behavior;
+- focused documentation or translation improvements.
+
+Large feature expansions should start as an issue so the project does not accidentally become a general-purpose moderation suite.
+
+## Requirements
+
+- PHP 7.4+
+- Composer 2
+- WordPress 5.9+ compatibility target
+- Docker Compose v2 for the optional local environment
+
+CI currently exercises PHP 7.4, 8.0, 8.2, 8.3, 8.4 and 8.5 and runs the official WordPress Plugin Check action.
+
+## Setup
 
 ```bash
 composer install
 ```
 
-Si usas Docker, en `dev/`:
+Optional local WordPress stack:
 
 ```bash
-chmod +x scripts/wp-setup.sh
+cd dev
+cp .env.example .env
 docker compose up -d
 ```
 
-## Linter (PHPCS + WPCS + PSR-12)
+See `dev/README.md` for the manual smoke-test checklist.
 
-- Reglas: `phpcs.xml`
-- Ejecutar:
+## Quality checks
 
 ```bash
+# WordPress Coding Standards
 composer lint
-# o con reporte completo
+
+# Full PHPCS report
 composer run lint:report
-# autofix (best effort)
+
+# Best-effort autofix
 composer fix
+
+# PHP syntax
+find no-comments -type f -name '*.php' -print0 | xargs -0 -n1 php -l
 ```
 
-## Tests (próximo sprint)
+A pull request should not be considered ready if CI is red unless the failure is clearly unrelated and documented.
 
-Se integrará WordPress test suite (unit + integration) y GitHub Actions.
+## Safety rules for cleanup changes
 
-## Estructura del plugin
+Comment deletion is the highest-risk area of this plugin. Changes there should preserve these invariants:
+
+1. Dry-run never mutates data.
+2. `scope=trash` always means permanent deletion of already trashed comments.
+3. `strategy=trash` for other scopes must remain reversible.
+4. `scope=all + strategy=trash` must not empty Trash in the same operation.
+5. Batches must terminate even if another plugin vetoes a comment mutation.
+6. Filtering by post type must never broaden the requested scope.
+
+If a change touches `DeleteService`, manually test these cases before opening a PR.
+
+## WordPress behavior to verify
+
+For changes to comment blocking, verify at least:
+
+- a normal post with comments open;
+- a normal post with comments already closed;
+- a WooCommerce product with reviews open;
+- a WooCommerce product with reviews closed;
+- authenticated REST requests;
+- XML-RPC behavior when enabled/disabled;
+- Multisite with and without network `enforce`.
+
+## Project structure
 
 ```text
 no-comments/
-  no-comments.php              # Bootstrap y orquestación
+  no-comments.php
   includes/
     Application/
-      DeleteService.php        # Lógica de conteo/borrado (en refactor)
+      DeleteService.php
+    Infrastructure/
+      OptionsRepository.php
   languages/
+  readme.txt
   uninstall.php
 ```
 
-## Empaquetado
+The distributable plugin is the `no-comments/` directory. Development tooling stays outside it.
 
-Desde la raíz del workspace (`/Users/…/no comments`):
+## Versioning and releases
 
-```bash
-zip -r "no-comments-<version>.zip" "no-comments" -x "no-comments/.DS_Store" "no-comments/.git/*" "no-comments/node_modules/*" "no-comments/dev/*"
-```
+For a release:
 
-Ejemplo actual:
+1. Update the plugin header version in `no-comments/no-comments.php`.
+2. Update `Stable tag` and the changelog in `no-comments/readme.txt`.
+3. Update the version badge/release notes in the root README when necessary.
+4. Ensure CI passes.
+5. Tag the merge commit as `vX.Y.Z`.
 
-```bash
-zip -r "no-comments-1.10.0.zip" "no-comments" -x "no-comments/.DS_Store" "no-comments/.git/*" "no-comments/node_modules/*" "no-comments/dev/*"
-```
+A `v*` tag triggers the release workflow, which creates a clean plugin ZIP and attaches it to a GitHub Release. Do not commit generated ZIP files to source control.
 
-## Publicación
+## Pull requests
 
-- Actualiza `Stable tag` y `Changelog` en `no-comments/readme.txt`.
-- Asegúrate de que el header `Version` en `no-comments/no-comments.php` coincida.
-- Genera el ZIP limpio y súbelo al WP donde se quiera instalar.
+Keep PRs focused. In the description include:
 
-## WP-CLI útil
+- what changed;
+- why it changed;
+- user impact;
+- risk/rollback considerations for destructive behavior;
+- how you validated it.
 
-```bash
-# Estado
-wp no-comments status
+## Security
 
-# Activar/desactivar
-wp no-comments enable
-wp no-comments disable
-
-# Borrar
-wp no-comments delete --scope=spam --dry-run
-wp no-comments delete --scope=all --types=post,page
-
-# Woo reviews (compat)
-wp no-comments woo-reviews on|off|status
-```
-
-## REST API (nivel admin)
-
-- `GET  /wp-json/no-comments/v1/settings`
-- `POST /wp-json/no-comments/v1/settings` (body JSON: `level`, `enabled`, `rest`, `xmlrpc`, `woo`, `enforce`)
-- `POST /wp-json/no-comments/v1/actions/delete` (body JSON: `scope`, `types`, `strategy`, `dry_run`)
-
-Proteger siempre con Nonces/Cookies de admin (o usar credenciales de aplicación).
+Do not publish vulnerability details in a normal issue. Follow `SECURITY.md` for private reporting guidance.
