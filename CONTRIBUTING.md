@@ -20,7 +20,7 @@ Large feature expansions should start as an issue so the project does not accide
 
 - PHP 7.4+
 - Composer 2
-- WordPress 5.9+ compatibility target
+- WordPress 6.0+ compatibility target
 - Docker Compose v2 for the optional local environment
 
 CI currently exercises PHP 7.4, 8.0, 8.2, 8.3, 8.4 and 8.5 and runs the official WordPress Plugin Check action.

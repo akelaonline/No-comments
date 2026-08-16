@@ -1,13 +1,13 @@
 <?php
 /**
  * Plugin Name: NO Comments
- * Description: Disable comments and pings site-wide, preserve WooCommerce reviews, and safely clean up comments with dry runs.
- * Version: 1.11.0
- * Requires at least: 5.9
+ * Description: Cierra comentarios y pings en todo el sitio y limpia comentarios de forma segura, con WooCommerce, Multisite, REST y WP-CLI.
+ * Version: 1.12.0
+ * Requires at least: 6.0
  * Requires PHP: 7.4
- * Author: Alejandro D. José
+ * Author: Akela (@akelaonline)
  * Plugin URI: https://github.com/akelaonline/No-comments
- * Author URI: https://github.com/akelaonline
+ * Author URI: https://www.instagram.com/akelaonline/
  * License: GPLv2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Update URI: https://github.com/akelaonline/No-comments
@@ -18,6 +18,11 @@
 if ( ! defined( 'ABSPATH' ) ) {
     exit; // Salir si se accede directamente.
 }
+
+define( 'NO_COMMENTS_VERSION', '1.12.0' );
+define( 'NO_COMMENTS_FILE', __FILE__ );
+define( 'NO_COMMENTS_PATH', plugin_dir_path( __FILE__ ) );
+define( 'NO_COMMENTS_URL', plugin_dir_url( __FILE__ ) );
 
 // Cargas internas (refactor progresivo)
 if ( file_exists( __DIR__ . '/includes/Application/DeleteService.php' ) ) {
@@ -63,6 +68,10 @@ final class No_Comments_Plugin {
 
         // Acciones admin para borrar comentarios
         add_action( 'admin_post_no_comments_delete', [ __CLASS__, 'handle_delete_request' ] );
+
+        // Exportar / importar ajustes
+        add_action( 'admin_post_no_comments_export', [ __CLASS__, 'handle_export_request' ] );
+        add_action( 'admin_post_no_comments_import', [ __CLASS__, 'handle_import_request' ] );
 
         // Guardado de ajustes de red
         add_action( 'admin_post_no_comments_network_save', [ __CLASS__, 'handle_network_save' ] );
@@ -291,18 +300,54 @@ final class No_Comments_Plugin {
                 submit_button();
                 echo '</form>';
             }
+
+            self::render_transfer_card();
         }
         // Branding footer
         echo '<hr style="margin-top:24px;opacity:.25;" />';
         echo '<p style="color:#475569;">' . wp_kses_post( sprintf(
-            /* translators: 1: author/company name, 2: website URL, 3: X profile URL, 4: Instagram profile URL. */
-            __( 'Desarrollado por %1$s — <a href="%2$s" target="_blank">Web</a> · <a href="%3$s" target="_blank">X</a> · <a href="%4$s" target="_blank">Instagram</a>', 'no-comments' ),
-            'MKT Marketing Digital',
-            'https://mktmarketingdigital.com/',
-            'https://x.com/akelaonline',
-            'https://www.instagram.com/akelaonline'
+            /* translators: 1: author handle, 2: Instagram profile URL, 3: website URL. */
+            __( 'Creado por Akela (%1$s) — <a href="%2$s" target="_blank">Instagram</a> · <a href="%3$s" target="_blank">akela.dev</a>', 'no-comments' ),
+            '@akelaonline',
+            'https://www.instagram.com/akelaonline/',
+            'https://akela.dev/seo'
         ) ) . '</p>';
         echo '</div>';
+    }
+
+    /** Tarjeta de importación/exportación de ajustes. */
+    private static function render_transfer_card() {
+        $network_enforced = is_multisite() && class_exists( '\\NoComments\\Infrastructure\\OptionsRepository' ) && \NoComments\Infrastructure\OptionsRepository::is_enforced();
+        $export_url = wp_nonce_url( admin_url( 'admin-post.php?action=no_comments_export' ), 'no_comments_export_action', '_wpnonce_no_comments_export' );
+        echo '<div class="card" style="margin-top:16px;">';
+        echo '<h2>' . esc_html__( 'Importar / Exportar ajustes', 'no-comments' ) . '</h2>';
+        echo '<p>' . esc_html__( 'Exporta los ajustes a un archivo JSON para respaldo o para clonarlos en otro sitio, e impórtalos desde un archivo exportado.', 'no-comments' ) . '</p>';
+        echo '<p><a class="button button-secondary" href="' . esc_url( $export_url ) . '">' . esc_html__( 'Descargar ajustes (JSON)', 'no-comments' ) . '</a></p>';
+        if ( $network_enforced ) {
+            echo '<p class="description">' . esc_html__( 'La importación de ajustes de sitio está desactivada porque la red controla esta configuración.', 'no-comments' ) . '</p>';
+        } else {
+            echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" enctype="multipart/form-data" style="margin-top:10px;">';
+            wp_nonce_field( 'no_comments_import_action', '_wpnonce_no_comments_import' );
+            echo '<input type="hidden" name="action" value="no_comments_import" />';
+            echo '<p><input type="file" name="no_comments_import_file" accept="application/json,.json" /></p>';
+            submit_button( __( 'Importar ajustes', 'no-comments' ), 'secondary' );
+            echo '</form>';
+        }
+        echo '</div>';
+
+        if ( isset( $_GET['import'] ) ) {
+            $msg = [
+                'ok'         => __( 'Ajustes importados correctamente.', 'no-comments' ),
+                'error-file' => __( 'No se recibió un archivo válido.', 'no-comments' ),
+                'error-size' => __( 'El archivo es demasiado grande (máximo 512 KB).', 'no-comments' ),
+                'error-json' => __( 'El archivo debe ser un JSON válido exportado por NO Comments.', 'no-comments' ),
+            ];
+            $key = sanitize_key( wp_unslash( $_GET['import'] ) );
+            if ( isset( $msg[ $key ] ) ) {
+                $class = 'ok' === $key ? 'updated' : 'notice-error';
+                echo '<div class="notice ' . esc_attr( $class ) . ' nc-result"><p>' . esc_html( $msg[ $key ] ) . '</p></div>';
+            }
+        }
     }
 
     /** Aplica el bloqueo de comentarios cuando está habilitado */
@@ -313,6 +358,15 @@ final class No_Comments_Plugin {
 
         // Vaciar array de comentarios salvo excepciones.
         add_filter( 'comments_array', [ __CLASS__, 'filter_comments_array' ], 10, 2 );
+
+        // Performance: cortar las consultas de comentarios en el frontend sin tocar la BD.
+        // Se preservan los conteos, los estados de moderación y las consultas por IDs
+        // (necesarias para el borrado masivo y la limpieza programada).
+        add_filter( 'comments_pre_query', [ __CLASS__, 'filter_comments_pre_query' ], 10, 2 );
+
+        // Quitar feeds de comentarios: link de descubrimiento y acceso directo.
+        add_filter( 'feed_links_show_comments_feed', '__return_false', 20 );
+        add_action( 'template_redirect', [ __CLASS__, 'filter_comment_feed_redirect' ], 1 );
 
         // Quitar soporte de comentarios y trackbacks de todos los post types públicos
         add_action( 'init', function () {
@@ -402,16 +456,29 @@ final class No_Comments_Plugin {
         return (bool) get_option( self::OPTION_WOO, 0 ) && class_exists( 'WooCommerce' );
     }
 
+    /**
+     * Determina si un post es una excepción al cierre global (p. ej. reseñas
+     * de productos WooCommerce).
+     *
+     * @param int $post_id
+     * @return bool
+     */
+    private static function is_exception_post( $post_id ) {
+        $post_id = absint( $post_id );
+        if ( ! $post_id || ! self::keep_woo_reviews() ) {
+            return false;
+        }
+        $post = get_post( $post_id );
+        return $post && 'product' === $post->post_type;
+    }
+
     /** Filtro: comments_open con excepción para productos */
     public static function filter_comments_open( $open, $post_id ) {
         if ( ! self::is_enabled() ) {
             return $open;
         }
-        if ( self::keep_woo_reviews() ) {
-            $post = get_post( $post_id );
-            if ( $post && 'product' === $post->post_type ) {
-                return $open; // Respetar si las reviews del producto están abiertas o cerradas.
-            }
+        if ( self::is_exception_post( $post_id ) ) {
+            return $open; // Respetar si las reviews del producto están abiertas o cerradas.
         }
         return false;
     }
@@ -421,13 +488,58 @@ final class No_Comments_Plugin {
         if ( ! self::is_enabled() ) {
             return $comments;
         }
-        if ( self::keep_woo_reviews() ) {
-            $post = get_post( $post_id );
-            if ( $post && 'product' === $post->post_type ) {
-                return $comments; // mostrar reviews
-            }
+        if ( self::is_exception_post( $post_id ) ) {
+            return $comments; // mostrar reviews
         }
         return [];
+    }
+
+    /**
+     * Filtro: evita la consulta a la base de datos cuando los comentarios
+     * están cerrados globalmente. Mantiene intactos:
+     *  - los conteos (admin y dry-run);
+     *  - los estados de moderación (spam/hold/trash) usados por la limpieza;
+     *  - las consultas por IDs (borrado masivo);
+     *  - las consultas de posts de excepción (reseñas de productos).
+     *
+     * @param mixed            $comments
+     * @param \WP_Comment_Query $query
+     * @return mixed
+     */
+    public static function filter_comments_pre_query( $comments, $query ) {
+        if ( ! self::is_enabled() || ! isset( $query->query_vars ) ) {
+            return $comments;
+        }
+        $vars = $query->query_vars;
+
+        // Conteos, consultas de administración (IDs) y estados de moderación se dejan pasar.
+        if ( ! empty( $vars['count'] ) || 'ids' === ( isset( $vars['fields'] ) ? $vars['fields'] : 'all' ) ) {
+            return $comments;
+        }
+        $status = isset( $vars['status'] ) ? $vars['status'] : 'approve';
+        if ( in_array( $status, [ 'spam', 'hold', 'trash' ], true ) ) {
+            return $comments;
+        }
+
+        $post_id = isset( $vars['post_id'] ) ? absint( $vars['post_id'] ) : 0;
+        if ( $post_id && self::is_exception_post( $post_id ) ) {
+            return $comments;
+        }
+        return [];
+    }
+
+    /**
+     * Bloquea el acceso directo a los feeds de comentarios
+     * (p. ej. ?feed=comments-rss2) redirigiendo al home.
+     */
+    public static function filter_comment_feed_redirect() {
+        $feed = get_query_var( 'feed' );
+        $is_comment_feed = is_comment_feed() || ( is_string( $feed ) && 0 === strpos( $feed, 'comments-' ) );
+        if ( ! $is_comment_feed || is_singular() ) {
+            return; // En un singular con withcomments los comentarios ya están cerrados.
+        }
+        wp_safe_redirect( home_url( '/' ), 301 );
+        exit;
     }
 
     /** Filtro: bloquear creación salvo productos. */
@@ -435,11 +547,8 @@ final class No_Comments_Plugin {
         if ( ! self::is_enabled() ) {
             return $approved;
         }
-        if ( self::keep_woo_reviews() && ! empty( $commentdata['comment_post_ID'] ) ) {
-            $post = get_post( (int) $commentdata['comment_post_ID'] );
-            if ( $post && 'product' === $post->post_type ) {
-                return $approved; // Respetar el flujo normal de reviews.
-            }
+        if ( ! empty( $commentdata['comment_post_ID'] ) && self::is_exception_post( (int) $commentdata['comment_post_ID'] ) ) {
+            return $approved; // Respetar el flujo normal de reviews.
         }
         return new WP_Error( 'no_comments_disabled', __( 'Los comentarios están cerrados en todo el sitio.', 'no-comments' ), [ 'status' => 403 ] );
     }
@@ -724,6 +833,137 @@ final class No_Comments_Plugin {
     }
 
     /**
+     * Exporta todos los ajustes de NO Comments a un array serializable.
+     *
+     * @return array
+     */
+    public static function get_export_payload() {
+        $payload = [
+            'plugin'   => 'no-comments',
+            'version'  => NO_COMMENTS_VERSION,
+            'exported' => gmdate( 'c' ),
+            'site'     => [
+                'enabled' => (bool) get_option( self::OPTION_KEY, 0 ),
+                'rest'    => (bool) get_option( self::OPTION_REST, 1 ),
+                'xmlrpc'  => (bool) get_option( self::OPTION_XMLRPC, 1 ),
+                'woo'     => (bool) get_option( self::OPTION_WOO, 0 ),
+            ],
+        ];
+        if ( is_multisite() ) {
+            $payload['network'] = self::get_network_settings();
+        }
+        return $payload;
+    }
+
+    /**
+     * Importa ajustes desde un array validado (whitelist de claves).
+     *
+     * @param array  $data  Payload (puede incluir las claves site/network de un export).
+     * @param string $level site|network
+     * @return array Claves aplicadas por nivel: [ 'site' => string[], 'network' => string[] ]
+     */
+    public static function import_settings( array $data, $level = 'site' ) {
+        $applied = [ 'site' => [], 'network' => [] ];
+
+        $site_map = [
+            'enabled' => self::OPTION_KEY,
+            'rest'    => self::OPTION_REST,
+            'xmlrpc'  => self::OPTION_XMLRPC,
+            'woo'     => self::OPTION_WOO,
+        ];
+
+        if ( 'network' === $level && is_multisite() ) {
+            $src = isset( $data['network'] ) && is_array( $data['network'] ) ? $data['network'] : $data;
+            $net = self::get_network_settings();
+            foreach ( [ 'enforce', 'enabled', 'rest', 'xmlrpc', 'woo' ] as $key ) {
+                if ( array_key_exists( $key, $src ) ) {
+                    $net[ $key ] = $src[ $key ] ? 1 : 0;
+                    $applied['network'][] = $key;
+                }
+            }
+            update_site_option( self::OPTION_NETWORK, $net );
+        } elseif ( 'site' === $level ) {
+            $src = isset( $data['site'] ) && is_array( $data['site'] ) ? $data['site'] : $data;
+            foreach ( $site_map as $key => $option ) {
+                if ( array_key_exists( $key, $src ) ) {
+                    update_option( $option, $src[ $key ] ? 1 : 0 );
+                    $applied['site'][] = $key;
+                }
+            }
+        }
+
+        return $applied;
+    }
+
+    /**
+     * Snapshot de estado efectivo para UI/CLI (respeta multisite).
+     *
+     * @return array
+     */
+    public static function get_status() {
+        return [
+            'enabled'          => self::is_enabled(),
+            'rest'             => self::get_rest_disabled(),
+            'xmlrpc'           => self::get_xmlrpc_disabled(),
+            'woo'              => self::keep_woo_reviews(),
+            'network_enforced' => is_multisite() && class_exists( '\\NoComments\\Infrastructure\\OptionsRepository' ) && \NoComments\Infrastructure\OptionsRepository::is_enforced(),
+        ];
+    }
+
+    /** Descarga un JSON con los ajustes actuales. */
+    public static function handle_export_request() {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( esc_html__( 'Permisos insuficientes.', 'no-comments' ) );
+        }
+        check_admin_referer( 'no_comments_export_action', '_wpnonce_no_comments_export' );
+
+        nocache_headers();
+        header( 'Content-Type: application/json; charset=utf-8' );
+        header( 'Content-Disposition: attachment; filename="no-comments-settings-' . gmdate( 'Ymd-His' ) . '.json"' );
+        echo wp_json_encode( self::get_export_payload(), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
+        exit;
+    }
+
+    /** Importa ajustes desde un archivo JSON subido. */
+    public static function handle_import_request() {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( esc_html__( 'Permisos insuficientes.', 'no-comments' ) );
+        }
+        check_admin_referer( 'no_comments_import_action', '_wpnonce_no_comments_import' );
+
+        $redirect = add_query_arg( [ 'page' => self::PAGE_SLUG, 'import' => 'error-file' ], admin_url( 'options-general.php' ) );
+
+        if ( ! isset( $_FILES['no_comments_import_file'] ) ) {
+            wp_safe_redirect( $redirect );
+            exit;
+        }
+
+        // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- El archivo se valida por tamaño y contenido JSON.
+        $file = $_FILES['no_comments_import_file'];
+        if ( UPLOAD_ERR_OK !== (int) $file['error'] ) {
+            wp_safe_redirect( $redirect );
+            exit;
+        }
+
+        if ( (int) $file['size'] > 512 * 1024 ) { // 512 KB es más que suficiente para un JSON de ajustes.
+            wp_safe_redirect( add_query_arg( 'import', 'error-size', $redirect ) );
+            exit;
+        }
+
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Lectura de un upload validado por tamaño y JSON.
+        $raw  = file_get_contents( $file['tmp_name'] );
+        $data = is_string( $raw ) ? json_decode( $raw, true ) : null;
+        if ( ! is_array( $data ) ) {
+            wp_safe_redirect( add_query_arg( 'import', 'error-json', $redirect ) );
+            exit;
+        }
+
+        self::import_settings( $data, 'site' );
+        wp_safe_redirect( add_query_arg( 'import', 'ok', $redirect ) );
+        exit;
+    }
+
+    /**
      * Site Health: registra el test de estado de NO Comments.
      */
     public static function register_site_health_tests( $tests ) {
@@ -809,9 +1049,8 @@ final class No_Comments_Plugin {
      */
     public static function plugin_row_meta( $links, $file ) {
         if ( plugin_basename( __FILE__ ) === $file ) {
-            $links[] = '<a href="https://mktmarketingdigital.com/" target="_blank">' . esc_html__( 'Visitar la web del plugin', 'no-comments' ) . '</a>';
-            $links[] = '<a href="https://x.com/akelaonline" target="_blank">X</a>';
-            $links[] = '<a href="https://www.instagram.com/akelaonline" target="_blank">Instagram</a>';
+            $links[] = '<a href="https://www.instagram.com/akelaonline/" target="_blank">' . esc_html__( 'Instagram', 'no-comments' ) . '</a>';
+            $links[] = '<a href="https://akela.dev/seo" target="_blank">akela.dev</a>';
         }
         return $links;
     }
@@ -851,6 +1090,22 @@ final class No_Comments_Plugin {
                 'types'    => [ 'type' => 'array', 'required' => false, 'items' => [ 'type' => 'string' ] ],
                 'dry_run'  => [ 'type' => 'boolean', 'required' => false ],
                 'strategy' => [ 'type' => 'string', 'enum' => [ 'delete', 'trash' ], 'required' => false ],
+            ],
+        ] );
+
+        register_rest_route( $ns, '/settings/export', [
+            'methods'             => \WP_REST_Server::READABLE,
+            'callback'            => [ __CLASS__, 'rest_export_settings' ],
+            'permission_callback' => function () { return current_user_can( 'manage_options' ); },
+        ] );
+
+        register_rest_route( $ns, '/settings/import', [
+            'methods'             => \WP_REST_Server::CREATABLE,
+            'callback'            => [ __CLASS__, 'rest_import_settings' ],
+            'permission_callback' => function () { return current_user_can( 'manage_options' ); },
+            'args'                => [
+                'level'    => [ 'type' => 'string', 'enum' => [ 'site', 'network' ], 'required' => false ],
+                'settings' => [ 'type' => 'object', 'required' => true ],
             ],
         ] );
     }
@@ -933,6 +1188,40 @@ final class No_Comments_Plugin {
         }
         $deleted = self::delete_comments( $scope, $types, $strategy );
         return [ 'deleted' => (int) $deleted, 'dry_run' => false, 'scope' => $scope, 'types' => $types, 'strategy' => $strategy ];
+    }
+
+    /** REST: exporta un snapshot completo de ajustes. */
+    public static function rest_export_settings( $request ) {
+        return self::get_export_payload();
+    }
+
+    /**
+     * REST: importa ajustes desde un payload JSON.
+     */
+    public static function rest_import_settings( $request ) {
+        $level    = $request->get_param( 'level' ) ?: 'site';
+        $settings = $request->get_param( 'settings' );
+
+        if ( 'network' === $level ) {
+            if ( ! is_multisite() ) {
+                return new \WP_Error( 'no_comments_not_multisite', __( 'Este sitio no es una red multisite.', 'no-comments' ), [ 'status' => 400 ] );
+            }
+            if ( ! current_user_can( 'manage_network_options' ) ) {
+                return new \WP_Error( 'no_comments_forbidden', __( 'Permisos insuficientes para ajustes de red.', 'no-comments' ), [ 'status' => 403 ] );
+            }
+        } elseif ( is_multisite() && class_exists( '\\NoComments\\Infrastructure\\OptionsRepository' ) && \NoComments\Infrastructure\OptionsRepository::is_enforced() ) {
+            return new \WP_Error( 'no_comments_network_enforced', __( 'Los ajustes del sitio están controlados por la red.', 'no-comments' ), [ 'status' => 409 ] );
+        }
+
+        if ( ! is_array( $settings ) ) {
+            return new \WP_Error( 'no_comments_invalid_payload', __( 'El payload de ajustes debe ser un objeto JSON.', 'no-comments' ), [ 'status' => 400 ] );
+        }
+
+        $applied = self::import_settings( $settings, $level );
+        return [
+            'applied'  => $applied,
+            'settings' => self::rest_get_settings( $request ),
+        ];
     }
 
     /**
@@ -1075,11 +1364,17 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
      */
     class No_Comments_CLI_Command extends WP_CLI_Command {
         /**
-         * Muestra el estado actual.
+         * Muestra el estado actual (efectivo, considerando multisite).
          */
         public function status() {
-            $enabled = (bool) get_option( No_Comments_Plugin::OPTION_KEY, 0 );
-            WP_CLI::log( 'no_comments_enabled = ' . ( $enabled ? '1' : '0' ) );
+            $s = No_Comments_Plugin::get_status();
+            WP_CLI::log( 'enabled = ' . ( $s['enabled'] ? '1' : '0' ) );
+            WP_CLI::log( 'rest = ' . ( $s['rest'] ? '1' : '0' ) );
+            WP_CLI::log( 'xmlrpc = ' . ( $s['xmlrpc'] ? '1' : '0' ) );
+            WP_CLI::log( 'woo_reviews = ' . ( $s['woo'] ? '1' : '0' ) );
+            if ( $s['network_enforced'] ) {
+                WP_CLI::log( 'network = enforced' );
+            }
         }
         /**
          * Activa el bloqueo global de comentarios.
@@ -1106,6 +1401,9 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
          * [--types=<types>]
          * : lista separada por comas de tipos de post a limitar (ej: post,page,product)
          *
+         * [--strategy=<strategy>]
+         * : delete (definitivo) o trash (papelera, cuando aplique). Por defecto: delete.
+         *
          * [--dry-run]
          * : calcula cuántos se borrarían sin ejecutar el borrado.
          *
@@ -1114,11 +1412,13 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
          * wp no-comments delete --scope=all
          * wp no-comments delete --scope=spam --dry-run
          * wp no-comments delete --scope=all --types=post,page
+         * wp no-comments delete --scope=pending --strategy=trash
          */
         public function delete( $args, $assoc_args ) {
-            $scope  = isset( $assoc_args['scope'] ) ? $assoc_args['scope'] : 'spam';
-            $dryrun = ! empty( $assoc_args['dry-run'] );
-            $types  = [];
+            $scope    = isset( $assoc_args['scope'] ) ? $assoc_args['scope'] : 'spam';
+            $dryrun   = ! empty( $assoc_args['dry-run'] );
+            $strategy = isset( $assoc_args['strategy'] ) && 'trash' === $assoc_args['strategy'] ? 'trash' : 'delete';
+            $types    = [];
             if ( ! empty( $assoc_args['types'] ) ) {
                 $parts = array_map( 'trim', explode( ',', $assoc_args['types'] ) );
                 foreach ( $parts as $t ) {
@@ -1133,8 +1433,65 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
                 return;
             }
 
-            $deleted = No_Comments_Plugin::delete_comments( $scope, $types );
-            WP_CLI::success( sprintf( 'Eliminados %d comentarios (alcance: %s%s).', $deleted, $scope, empty( $types ) ? '' : ', types=' . implode( ',', $types ) ) );
+            $deleted = No_Comments_Plugin::delete_comments( $scope, $types, $strategy );
+            WP_CLI::success( sprintf( 'Eliminados %d comentarios (alcance: %s%s%s).', $deleted, $scope, empty( $types ) ? '' : ', types=' . implode( ',', $types ), ', strategy=' . $strategy ) );
+        }
+
+        /**
+         * Exporta o importa los ajustes del plugin.
+         *
+         * ## OPTIONS
+         *
+         * <accion>
+         * : export|import
+         *
+         * [<archivo>]
+         * : Para import: ruta del JSON a importar. Para export: ruta de salida (alternativa a --file).
+         *
+         * [--file=<file>]
+         * : Ruta de salida del export. Si no se indica, el JSON se imprime por stdout.
+         *
+         * ## EXAMPLES
+         *
+         * wp no-comments settings export
+         * wp no-comments settings export --file=no-comments.json
+         * wp no-comments settings import no-comments.json
+         */
+        public function settings( $args, $assoc_args ) {
+            $action = isset( $args[0] ) ? strtolower( $args[0] ) : '';
+
+            if ( 'export' === $action ) {
+                $json = wp_json_encode( No_Comments_Plugin::get_export_payload(), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
+                $file = isset( $assoc_args['file'] ) ? $assoc_args['file'] : ( isset( $args[1] ) ? $args[1] : '' );
+                if ( $file ) {
+                    // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Export local indicado por el operador.
+                    if ( false === file_put_contents( $file, $json . PHP_EOL ) ) {
+                        WP_CLI::error( sprintf( 'No se pudo escribir en %s.', $file ) );
+                    }
+                    WP_CLI::success( 'Ajustes exportados a ' . $file );
+                } else {
+                    WP_CLI::log( $json );
+                }
+                return;
+            }
+
+            if ( 'import' === $action ) {
+                $file = isset( $args[1] ) ? $args[1] : '';
+                if ( ! $file || ! is_file( $file ) ) {
+                    WP_CLI::error( 'Indicá la ruta del archivo JSON: wp no-comments settings import <archivo>.' );
+                }
+                // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Lectura de archivo local indicado por el operador.
+                $raw  = file_get_contents( $file );
+                $data = is_string( $raw ) ? json_decode( $raw, true ) : null;
+                if ( ! is_array( $data ) ) {
+                    WP_CLI::error( 'El archivo debe ser un JSON válido exportado por NO Comments.' );
+                }
+                $applied = No_Comments_Plugin::import_settings( $data, 'site' );
+                WP_CLI::success( 'Ajustes importados. Aplicados: site=[' . implode( ', ', $applied['site'] ) . '], network=[' . implode( ', ', $applied['network'] ) . '].' );
+                return;
+            }
+
+            WP_CLI::error( 'Uso: wp no-comments settings export [--file=<ruta>] | wp no-comments settings import <archivo>.' );
         }
 
         /**

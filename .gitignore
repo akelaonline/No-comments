@@ -14,5 +14,9 @@
 # Packaging artifacts
 *.zip
 
+# Composer (tooling only; CI resolves dependencies per PHP version)
+/vendor/
+composer.lock
+
 # WordPress debug log (if mapped locally)
 wp-content/debug.log

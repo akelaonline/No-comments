@@ -3,12 +3,20 @@
   "description": "NO Comments — disable comments and safely clean them up in WordPress.",
   "type": "project",
   "license": "GPL-2.0-or-later",
+  "homepage": "https://github.com/akelaonline/No-comments",
   "authors": [
     {
-      "name": "Alejandro D. José",
-      "homepage": "https://github.com/akelaonline"
+      "name": "Akela",
+      "email": "adjose@gmail.com",
+      "homepage": "https://www.instagram.com/akelaonline/",
+      "role": "Developer"
     }
   ],
+  "support": {
+    "email": "adjose@gmail.com",
+    "issues": "https://github.com/akelaonline/No-comments/issues",
+    "source": "https://github.com/akelaonline/No-comments"
+  },
   "require": {
     "php": ">=7.4"
   },
@@ -27,9 +35,5 @@
       "dealerdirect/phpcodesniffer-composer-installer": true
     },
     "sort-packages": true
-  },
-  "support": {
-    "issues": "https://github.com/akelaonline/No-comments/issues",
-    "source": "https://github.com/akelaonline/No-comments"
   }
 }

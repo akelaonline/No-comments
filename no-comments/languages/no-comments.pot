@@ -1,82 +1,422 @@
+# Copyright (C) 2026 Akela (@akelaonline)
+# This file is distributed under the GPLv2 or later.
 msgid ""
 msgstr ""
-"Project-Id-Version: NO Comments 1.10.1\n"
-"Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-09-13 22:46+0000\n"
+"Project-Id-Version: NO Comments 1.12.0\n"
+"Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/no-comments\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"X-Generator: Cascade\n"
+"POT-Creation-Date: 2026-08-16T19:03:06+00:00\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"X-Generator: WP-CLI 2.12.0\n"
 "X-Domain: no-comments\n"
 
-#: no-comments.php:90
-msgid "Cerrar comentarios y pings en todo el sitio"
+#. Plugin Name of the plugin
+#: no-comments.php
+#: no-comments.php:233
+#: no-comments.php:234
+#: no-comments.php:249
+#: no-comments.php:986
+#: no-comments.php:993
+#: no-comments.php:1258
+msgid "NO Comments"
 msgstr ""
 
-#: no-comments.php:92
+#. Plugin URI of the plugin
+#: no-comments.php
+msgid "https://github.com/akelaonline/No-comments"
+msgstr ""
+
+#. Description of the plugin
+#: no-comments.php
+msgid "Cierra comentarios y pings en todo el sitio y limpia comentarios de forma segura, con WooCommerce, Multisite, REST y WP-CLI."
+msgstr ""
+
+#. Author of the plugin
+#: no-comments.php
+msgid "Akela (@akelaonline)"
+msgstr ""
+
+#. Author URI of the plugin
+#: no-comments.php
+msgid "https://www.instagram.com/akelaonline/"
+msgstr ""
+
+#: no-comments.php:158
+#: no-comments.php:1043
 msgid "Ajustes"
 msgstr ""
 
-#: no-comments.php:145
-msgid "Disable Comments"
+#: no-comments.php:160
+msgid "Activa o desactiva los comentarios (y pings) en todo el sitio."
 msgstr ""
 
-#: no-comments.php:146
-msgid "Delete Comments"
+#: no-comments.php:167
+msgid "Deshabilitar comentarios"
 msgstr ""
 
-#: no-comments.php:180
-msgid "Comentarios deshabilitados globalmente"
-msgstr ""
-
-#: no-comments.php:181
-msgid "Comentarios habilitados (comportamiento por defecto)"
-msgstr ""
-
-#: no-comments.php:348
-msgid "Estas acciones son destructivas. Te sugerimos hacer un respaldo antes de continuar."
-msgstr ""
-
-#: no-comments.php:363
-msgid "Eliminar solo Spam"
-msgstr ""
-
-#: no-comments.php:364
-msgid "Eliminar Pendientes (moderación)"
-msgstr ""
-
-#: no-comments.php:365
-msgid "Vaciar Papelera"
-msgstr ""
-
-#: no-comments.php:366
-msgid "Eliminar TODOS los comentarios"
-msgstr ""
-
-#: no-comments.php:369
-msgid "Simulación (dry‑run): solo calcula y no borra"
-msgstr ""
-
-#: no-comments.php:370
-msgid "Escribe DELETE para confirmar"
-msgstr ""
-
-#: no-comments.php:331
+#: no-comments.php:175
 msgid "APIs"
 msgstr ""
 
-#: no-comments.php:133
-msgid "Deshabilitar endpoint REST de comentarios (wp/v2/comments)"
+#: no-comments.php:183
+#: no-comments.php:1300
+msgid "Compatibilidad"
 msgstr ""
 
-#: no-comments.php:136
-msgid "Deshabilitar XML‑RPC (método wp.newComment)"
+#: no-comments.php:196
+msgid "Cerrar comentarios y pings en todo el sitio"
 msgstr ""
 
-#: no-comments.php:138
-msgid "Recomendado mantenerlos activos (marcados) para mayor seguridad."
+#: no-comments.php:204
+msgid "Cuando el bloqueo esté activo, además puedes cortar los puntos de entrada de API:"
 msgstr ""
 
 #: no-comments.php:205
+msgid "Quita el endpoint REST de comentarios para reducir superficie de ataque o integraciones no deseadas."
+msgstr ""
+
+#: no-comments.php:207
+msgid "Deshabilitar endpoint REST de comentarios (wp/v2/comments)"
+msgstr ""
+
+#: no-comments.php:209
+msgid "Bloquea la creación de comentarios vía XML‑RPC (método wp.newComment)."
+msgstr ""
+
+#: no-comments.php:211
+msgid "Deshabilitar XML‑RPC (método wp.newComment)"
+msgstr ""
+
+#: no-comments.php:213
+msgid "Recomendado mantenerlos activos (marcados) para mayor seguridad."
+msgstr ""
+
+#: no-comments.php:220
+msgid "Opciones de compatibilidad con plugins de terceros."
+msgstr ""
+
+#: no-comments.php:223
+#: no-comments.php:1302
+msgid "Mantener reseñas de productos (WooCommerce)"
+msgstr ""
+
+#: no-comments.php:226
+msgid "WooCommerce no está activo. Puedes dejar esta opción preparada y tendrá efecto cuando WooCommerce se active."
+msgstr ""
+
+#: no-comments.php:257
+msgid "Ayuda"
+msgstr ""
+
+#: no-comments.php:258
+msgid "Usa \"Disable Comments\" para cerrar comentarios globalmente. En \"Delete Comments\" puedes simular (dry‑run) o ejecutar limpieza por alcance."
+msgstr ""
+
+#: no-comments.php:265
+msgid "Disable Comments"
+msgstr ""
+
+#: no-comments.php:266
+#: no-comments.php:680
+msgid "Delete Comments"
+msgstr ""
+
+#: no-comments.php:281
+msgid "Comentarios deshabilitados globalmente"
+msgstr ""
+
+#: no-comments.php:281
+msgid "Comentarios habilitados (comportamiento por defecto)"
+msgstr ""
+
+#. translators: %s: URL to the network-level NO Comments settings page.
+#: no-comments.php:292
+#, php-format
+msgid "Estos ajustes están controlados por la red. Gestiona los valores desde <a href=\"%s\">NO Comments (Network)</a>."
+msgstr ""
+
+#. translators: 1: author handle, 2: Instagram profile URL, 3: website URL.
+#: no-comments.php:310
+#, php-format
+msgid "Creado por Akela (%1$s) — <a href=\"%2$s\" target=\"_blank\">Instagram</a> · <a href=\"%3$s\" target=\"_blank\">akela.dev</a>"
+msgstr ""
+
+#: no-comments.php:323
+msgid "Importar / Exportar ajustes"
+msgstr ""
+
+#: no-comments.php:324
+msgid "Exporta los ajustes a un archivo JSON para respaldo o para clonarlos en otro sitio, e impórtalos desde un archivo exportado."
+msgstr ""
+
+#: no-comments.php:325
+msgid "Descargar ajustes (JSON)"
+msgstr ""
+
+#: no-comments.php:327
+msgid "La importación de ajustes de sitio está desactivada porque la red controla esta configuración."
+msgstr ""
+
+#: no-comments.php:333
+msgid "Importar ajustes"
+msgstr ""
+
+#: no-comments.php:340
+msgid "Ajustes importados correctamente."
+msgstr ""
+
+#: no-comments.php:341
+msgid "No se recibió un archivo válido."
+msgstr ""
+
+#: no-comments.php:342
+msgid "El archivo es demasiado grande (máximo 512 KB)."
+msgstr ""
+
+#: no-comments.php:343
+msgid "El archivo debe ser un JSON válido exportado por NO Comments."
+msgstr ""
+
+#: no-comments.php:553
 msgid "Los comentarios están cerrados en todo el sitio."
+msgstr ""
+
+#: no-comments.php:681
+msgid "Estas acciones son destructivas. Te sugerimos hacer un respaldo antes de continuar."
+msgstr ""
+
+#: no-comments.php:684
+msgid "Aprobados"
+msgstr ""
+
+#: no-comments.php:685
+#: no-comments.php:727
+msgid "Pendientes"
+msgstr ""
+
+#: no-comments.php:686
+#: no-comments.php:726
+msgid "Spam"
+msgstr ""
+
+#: no-comments.php:687
+#: no-comments.php:728
+msgid "Papelera"
+msgstr ""
+
+#: no-comments.php:688
+msgid "Total"
+msgstr ""
+
+#: no-comments.php:698
+msgid "Solo Spam"
+msgstr ""
+
+#: no-comments.php:699
+msgid "Solo Pendientes"
+msgstr ""
+
+#: no-comments.php:700
+#: no-comments.php:739
+msgid "Vaciar Papelera"
+msgstr ""
+
+#: no-comments.php:701
+#: no-comments.php:729
+msgid "Todos"
+msgstr ""
+
+#: no-comments.php:704
+msgid "Acciones rápidas:"
+msgstr ""
+
+#: no-comments.php:723
+msgid "Ámbito de borrado"
+msgstr ""
+
+#: no-comments.php:737
+msgid "Eliminar solo Spam"
+msgstr ""
+
+#: no-comments.php:738
+msgid "Eliminar Pendientes (moderación)"
+msgstr ""
+
+#: no-comments.php:740
+msgid "Eliminar TODOS los comentarios"
+msgstr ""
+
+#: no-comments.php:746
+msgid "Limitar por tipos de contenido (opcional)"
+msgstr ""
+
+#: no-comments.php:754
+msgid "Si no seleccionas ningún tipo, se aplicará a todos."
+msgstr ""
+
+#: no-comments.php:760
+msgid "Estrategia"
+msgstr ""
+
+#: no-comments.php:761
+msgid "Borra definitivamente (incluida la papelera si el alcance es Papelera o Todos)."
+msgstr ""
+
+#: no-comments.php:761
+msgid "Borrar permanentemente"
+msgstr ""
+
+#: no-comments.php:762
+msgid "Mueve a Papelera cuando aplique. Al vaciar Papelera se fuerza borrado definitivo."
+msgstr ""
+
+#: no-comments.php:762
+msgid "Mover a Papelera (reversible)"
+msgstr ""
+
+#: no-comments.php:765
+msgid "Simulación (dry‑run): solo calcula y no borra"
+msgstr ""
+
+#: no-comments.php:766
+msgid "Escribe DELETE para confirmar"
+msgstr ""
+
+#: no-comments.php:767
+msgid "Ejecutar limpieza"
+msgstr ""
+
+#: no-comments.php:778
+msgid "todos"
+msgstr ""
+
+#: no-comments.php:779
+msgid "Simulación (dry‑run): se borrarían"
+msgstr ""
+
+#: no-comments.php:779
+msgid "Eliminados"
+msgstr ""
+
+#: no-comments.php:784
+msgid "alcance"
+msgstr ""
+
+#: no-comments.php:785
+msgid "tipos"
+msgstr ""
+
+#: no-comments.php:786
+msgid "estrategia"
+msgstr ""
+
+#: no-comments.php:790
+msgid "Debes escribir DELETE para confirmar."
+msgstr ""
+
+#: no-comments.php:797
+#: no-comments.php:916
+#: no-comments.php:930
+#: no-comments.php:1023
+#: no-comments.php:1313
+msgid "Permisos insuficientes."
+msgstr ""
+
+#: no-comments.php:971
+msgid "NO Comments: bloqueo de comentarios"
+msgstr ""
+
+#: no-comments.php:984
+msgid "NO Comments está bloqueando comentarios globalmente"
+msgstr ""
+
+#: no-comments.php:987
+msgid "Los formularios de comentarios y pings están cerrados."
+msgstr ""
+
+#: no-comments.php:991
+msgid "NO Comments está desactivado"
+msgstr ""
+
+#: no-comments.php:994
+msgid "Actívalo si quieres bloquear comentarios en todo el sitio."
+msgstr ""
+
+#: no-comments.php:995
+msgid "Ir a ajustes"
+msgstr ""
+
+#: no-comments.php:1007
+msgid "NO Comments: ON"
+msgstr ""
+
+#: no-comments.php:1007
+msgid "NO Comments: OFF"
+msgstr ""
+
+#: no-comments.php:1052
+msgid "Instagram"
+msgstr ""
+
+#: no-comments.php:1149
+#: no-comments.php:1213
+msgid "Los ajustes del sitio están controlados por la red."
+msgstr ""
+
+#: no-comments.php:1154
+#: no-comments.php:1210
+msgid "Permisos insuficientes para ajustes de red."
+msgstr ""
+
+#: no-comments.php:1207
+msgid "Este sitio no es una red multisite."
+msgstr ""
+
+#: no-comments.php:1217
+msgid "El payload de ajustes debe ser un objeto JSON."
+msgstr ""
+
+#: no-comments.php:1257
+#: no-comments.php:1271
+msgid "NO Comments (Network)"
+msgstr ""
+
+#: no-comments.php:1273
+msgid "Ajustes de red guardados."
+msgstr ""
+
+#: no-comments.php:1282
+msgid "Forzar desde la Red"
+msgstr ""
+
+#: no-comments.php:1284
+msgid "Aplicar estos ajustes a todos los sitios"
+msgstr ""
+
+#: no-comments.php:1285
+msgid "Cuando está activo, los sitios no podrán cambiar estos valores."
+msgstr ""
+
+#: no-comments.php:1288
+msgid "Estado global"
+msgstr ""
+
+#: no-comments.php:1290
+msgid "Cerrar comentarios y pings en todo el network"
+msgstr ""
+
+#: no-comments.php:1295
+msgid "Deshabilitar endpoint REST de comentarios"
+msgstr ""
+
+#: no-comments.php:1297
+msgid "Deshabilitar XML‑RPC (wp.newComment)"
+msgstr ""
+
+#: no-comments.php:1306
+msgid "Guardar ajustes de red"
 msgstr ""

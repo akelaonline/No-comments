@@ -1,15 +1,15 @@
 === NO Comments ===
 Contributors: akelaonline
-Donate link: https://mktmarketingdigital.com/
+Donate link: https://akela.dev/seo
 Tags: comments, disable comments, discussion, spam, delete comments
-Requires at least: 5.9
+Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.11.0
+Stable tag: 1.12.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Cierra comentarios y pings globalmente y limpia comentarios de forma segura, con dry-run, WooCommerce, Multisite, REST y WP-CLI.
+Cierra comentarios y pings globalmente y limpia comentarios de forma segura, con dry-run, WooCommerce, Multisite, REST, WP-CLI e import/export de ajustes.
 
 == Descripción ==
 
@@ -27,6 +27,8 @@ Características principales:
 * Estrategia de borrado definitivo o movimiento reversible a Papelera.
 * WP-CLI y REST API para automatización administrativa.
 * Multisite con configuración de red y modo `enforce`.
+* Import/export de ajustes en JSON (UI, REST y WP-CLI).
+* Performance: con el bloqueo activo las consultas de comentarios se cortan sin tocar la base de datos, y los feeds de comentarios se desactivan.
 * Site Health para verificar rápidamente el estado del bloqueo.
 
 No envía datos a servicios externos y no requiere una cuenta de terceros.
@@ -62,6 +64,14 @@ Ajustes → NO Comments → pestaña "Delete Comments".
 
 "Todos + Mover a Papelera" conserva los comentarios en Papelera y no la vacía dentro de la misma operación. "Vaciar Papelera" siempre es definitivo.
 
+= Importar / Exportar ajustes =
+
+En Ajustes → NO Comments → "Importar / Exportar ajustes" puedes descargar un JSON con la configuración actual (útil como respaldo o para clonarla en otro sitio) e importarla desde un archivo exportado. Disponible también vía REST y WP-CLI.
+
+= Performance y feeds =
+
+Con el bloqueo global activo, NO Comments corta las consultas de comentarios en el frontend (no toca la base de datos) y desactiva los feeds de comentarios: se elimina el link de descubrimiento y el acceso directo redirige al home.
+
 == WP-CLI ==
 
 ```
@@ -69,8 +79,10 @@ wp no-comments status
 wp no-comments enable
 wp no-comments disable
 wp no-comments delete --scope=spam --dry-run
-wp no-comments delete --scope=all --types=post,page
+wp no-comments delete --scope=all --types=post,page --strategy=delete
 wp no-comments woo-reviews on|off|status
+wp no-comments settings export --file=no-comments.json
+wp no-comments settings import no-comments.json
 ```
 
 == REST API ==
@@ -80,6 +92,8 @@ Endpoints administrativos:
 * `GET /wp-json/no-comments/v1/settings`
 * `POST /wp-json/no-comments/v1/settings`
 * `POST /wp-json/no-comments/v1/actions/delete`
+* `GET /wp-json/no-comments/v1/settings/export`
+* `POST /wp-json/no-comments/v1/settings/import` (body: `level`, `settings`)
 
 Los endpoints usan comprobaciones de capabilities de WordPress. Autentica con cookies/nonces de administración o Application Passwords sobre HTTPS.
 
@@ -110,6 +124,15 @@ Sí. La opción de compatibilidad mantiene reviews de productos y respeta si un 
 Sí. Incluye ajustes de red y un modo `enforce` para aplicar una configuración común a todos los sitios.
 
 == Changelog ==
+
+= 1.12.0 =
+* Performance: las consultas de comentarios se cortan en el frontend cuando el bloqueo global está activo (hook `comments_pre_query`), sin consultas innecesarias a la base de datos.
+* Feeds: se desactivan los feeds de comentarios (link de descubrimiento eliminado y acceso directo redirigido al home).
+* Import/export: nuevos endpoints REST `GET /settings/export` y `POST /settings/import`.
+* Import/export: tarjeta "Importar / Exportar ajustes" en la pantalla de ajustes (descarga JSON y subida de archivo con validación de tamaño y formato).
+* WP-CLI: nuevos comandos `wp no-comments settings export` y `wp no-comments settings import`.
+* WP-CLI: `status` ahora muestra el estado efectivo (considera el modo `enforce` de red) y `delete` admite `--strategy=trash`.
+* Branding: autoría y enlaces alineados con Akela SEO y Tucho (Akela @akelaonline, akela.dev).
 
 = 1.11.0 =
 * Fix crítico: el bloqueo de nuevas inserciones usa `pre_comment_approved`, hook compatible con `WP_Error`, evitando respuestas inválidas desde `preprocess_comment`.

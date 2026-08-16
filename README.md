@@ -3,8 +3,8 @@
 **Disable WordPress comments completely — without breaking WooCommerce reviews when you still need them.**
 
 [![Quality](https://github.com/akelaonline/No-comments/actions/workflows/ci.yml/badge.svg)](https://github.com/akelaonline/No-comments/actions/workflows/ci.yml)
-![Version](https://img.shields.io/badge/version-1.11.0-111827)
-![WordPress](https://img.shields.io/badge/WordPress-tested%20to%207.0-21759b)
+![Version](https://img.shields.io/badge/version-1.12.0-111827)
+![WordPress](https://img.shields.io/badge/WordPress-6.0%2B-21759b)
 ![PHP](https://img.shields.io/badge/PHP-7.4%E2%80%938.5-777bb4)
 ![License](https://img.shields.io/badge/license-GPL--2.0--or--later-16a34a)
 
@@ -24,7 +24,9 @@ NO Comments gives that job one dedicated place:
 - preserve WooCommerce product reviews when required;
 - safely clean old comments with dry-runs and scoped deletion;
 - enforce one policy across WordPress Multisite;
-- automate administration through WP-CLI or authenticated REST requests.
+- automate administration through WP-CLI or authenticated REST requests;
+- export/import settings as JSON to back up or clone configuration;
+- short-circuit comment queries and comment feeds when the shutdown is active.
 
 ## Features
 
@@ -36,6 +38,7 @@ NO Comments gives that job one dedicated place:
 - Hides the Comments menu/admin-bar item where appropriate.
 - Redirects direct access to comment/discussion screens.
 - Exposes the current state through WordPress Site Health.
+- **Zero-cost frontend:** while the shutdown is active, comment queries are short-circuited through `comments_pre_query` (no database queries) and comment feeds are disabled (discovery link removed, direct access redirected home).
 
 ### API hardening
 
@@ -70,6 +73,10 @@ The plugin preserves each product's own review state: it will not force-open a p
 
 The compatibility option can also be configured before WooCommerce is activated.
 
+### Settings transfer
+
+Export the full configuration (site + network when applicable) to a JSON file and import it elsewhere — handy for backups and for cloning the same policy across client sites. Available from the settings screen (**Import / Export settings**), the REST API (`/settings/export`, `/settings/import`) and WP-CLI (`wp no-comments settings export|import`).
+
 ### Multisite
 
 Network administrators can define:
@@ -86,7 +93,7 @@ When network enforcement is active, site-level settings are treated as read-only
 
 | Component | Requirement |
 |---|---|
-| WordPress | 5.9+ |
+| WordPress | 6.0+ |
 | Tested with | WordPress 7.0.x |
 | PHP | 7.4+ |
 | CI matrix | PHP 7.4, 8.0, 8.2, 8.3, 8.4, 8.5 |
@@ -116,7 +123,7 @@ Then activate **NO Comments** from WordPress Admin.
 ## WP-CLI
 
 ```bash
-# Current state
+# Current state (effective, network-aware)
 wp no-comments status
 
 # Enable / disable global blocking
@@ -126,13 +133,17 @@ wp no-comments disable
 # Always inspect first
 wp no-comments delete --scope=spam --dry-run
 
-# Delete comments for selected post types
-wp no-comments delete --scope=all --types=post,page
+# Delete comments for selected post types (strategy: delete|trash)
+wp no-comments delete --scope=all --types=post,page --strategy=delete
 
 # WooCommerce review compatibility
 wp no-comments woo-reviews on
 wp no-comments woo-reviews off
 wp no-comments woo-reviews status
+
+# Export / import settings
+wp no-comments settings export --file=no-comments.json
+wp no-comments settings import no-comments.json
 ```
 
 ## REST API
@@ -143,6 +154,8 @@ Administrative endpoints:
 GET  /wp-json/no-comments/v1/settings
 POST /wp-json/no-comments/v1/settings
 POST /wp-json/no-comments/v1/actions/delete
+GET  /wp-json/no-comments/v1/settings/export
+POST /wp-json/no-comments/v1/settings/import
 ```
 
 Settings payload fields:
@@ -166,6 +179,20 @@ Delete payload example:
   "types": ["post", "page"],
   "strategy": "delete",
   "dry_run": true
+}
+```
+
+Import payload example (only whitelisted keys are applied):
+
+```json
+{
+  "level": "site",
+  "settings": {
+    "enabled": true,
+    "rest": true,
+    "xmlrpc": true,
+    "woo": false
+  }
 }
 ```
 
@@ -251,14 +278,13 @@ For security issues, do not publish exploit details in a normal issue. Follow [`
 
 ## Author
 
-Created and maintained by **Alejandro D. José** (`@akelaonline`).
+Created and maintained by **Akela** ([`@akelaonline`](https://www.instagram.com/akelaonline/)).
 
-I build products at the intersection of AI, automation, digital marketing and WordPress. I lead **MKT Marketing Digital** and maintain this repository as part of my public WordPress/open-source work.
+WordPress plugins in the Akela ecosystem: **Akela SEO** and **Tucho Performance**.
 
+- Instagram: [@akelaonline](https://www.instagram.com/akelaonline/)
+- Web: [akela.dev](https://akela.dev/seo)
 - GitHub: [akelaonline](https://github.com/akelaonline)
-- LinkedIn: [Alejandro D. José](https://www.linkedin.com/in/akelaonline/)
-- MKT Marketing Digital: [mktmarketingdigital.com](https://mktmarketingdigital.com/)
-- Marketing Digital Experience: [marketingdigitalexperience.com](https://marketingdigitalexperience.com/)
 
 ## License
 
