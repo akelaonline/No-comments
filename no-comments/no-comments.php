@@ -294,8 +294,8 @@ final class No_Comments_Plugin {
         }
         // Branding footer
         echo '<hr style="margin-top:24px;opacity:.25;" />';
-        // translators: 1: author/company name, 2: website URL, 3: X profile URL, 4: Instagram profile URL.
         echo '<p style="color:#475569;">' . wp_kses_post( sprintf(
+            /* translators: 1: author/company name, 2: website URL, 3: X profile URL, 4: Instagram profile URL. */
             __( 'Desarrollado por %1$s — <a href="%2$s" target="_blank">Web</a> · <a href="%3$s" target="_blank">X</a> · <a href="%4$s" target="_blank">Instagram</a>', 'no-comments' ),
             'MKT Marketing Digital',
             'https://mktmarketingdigital.com/',
@@ -693,7 +693,8 @@ final class No_Comments_Plugin {
         $confirm  = isset( $_POST['confirm'] ) ? sanitize_text_field( wp_unslash( $_POST['confirm'] ) ) : '';
         $dry_run  = ! empty( $_POST['dry_run'] );
         $strategy = isset( $_POST['delete_strategy'] ) && 'trash' === sanitize_key( wp_unslash( $_POST['delete_strategy'] ) ) ? 'trash' : 'delete';
-        $types    = [];
+        $types = [];
+        // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Every array element is sanitized with sanitize_key() immediately below.
         $raw_types = isset( $_POST['delete_types'] ) && is_array( $_POST['delete_types'] ) ? wp_unslash( $_POST['delete_types'] ) : [];
         foreach ( $raw_types as $t ) {
             $types[] = sanitize_key( $t );
