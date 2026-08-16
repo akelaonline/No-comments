@@ -1,7 +1,9 @@
 <?php
 namespace NoComments\Application;
 
-if ( ! defined( 'ABSPATH' ) ) { exit; }
+if ( ! defined( 'ABSPATH' ) ) {
+    exit;
+}
 
 /**
  * Encapsula las operaciones de borrado y conteo de comentarios.
@@ -10,62 +12,98 @@ class DeleteService {
     /**
      * Borra comentarios por alcance y tipos, con estrategia.
      *
-     * @param string   $scope    spam|pending|trash|all
-     * @param string[] $types    Tipos de post a limitar (vacío = todos)
-     * @param string   $strategy delete|trash (si scope=trash, siempre fuerza delete)
-     * @return int
+     * @param string   $scope    spam|pending|trash|all.
+     * @param string[] $types    Tipos de post a limitar (vacío = todos).
+     * @param string   $strategy delete|trash (scope=trash siempre fuerza delete).
+     * @return int Cantidad de comentarios modificados.
      */
     public static function delete( $scope, array $types = [], $strategy = 'delete' ) {
-        $deleted = 0;
+        $deleted  = 0;
+        $scope    = in_array( $scope, [ 'spam', 'pending', 'trash', 'all' ], true ) ? $scope : 'spam';
+        $strategy = 'trash' === $strategy ? 'trash' : 'delete';
 
-        $batch_delete = function( $args ) use ( &$deleted, $types, $strategy ) {
-            $args = wp_parse_args( $args, [
-                'number'  => 200,
-                'orderby' => 'comment_ID',
-                'order'   => 'ASC',
-                'fields'  => 'ids',
-                'status'  => 'all',
-            ] );
+        $batch_delete = function ( $args ) use ( &$deleted, $types, $strategy ) {
+            $args = wp_parse_args(
+                $args,
+                [
+                    'number'  => 200,
+                    'orderby' => 'comment_ID',
+                    'order'   => 'ASC',
+                    'fields'  => 'ids',
+                    'status'  => 'all',
+                ]
+            );
+
             if ( ! empty( $types ) ) {
                 $args['post_type'] = $types;
             }
-            $ids = get_comments( $args );
-            foreach ( $ids as $cid ) {
-                $status = isset( $args['status'] ) ? $args['status'] : 'all';
-                $force  = ( 'delete' === $strategy ) || ( 'trash' === $status );
-                if ( wp_delete_comment( $cid, $force ) ) {
-                    $deleted++;
+
+            $ids     = get_comments( $args );
+            $changed = 0;
+            $status  = isset( $args['status'] ) ? $args['status'] : 'all';
+            $force   = ( 'delete' === $strategy ) || ( 'trash' === $status );
+
+            foreach ( $ids as $comment_id ) {
+                if ( wp_delete_comment( $comment_id, $force ) ) {
+                    ++$deleted;
+                    ++$changed;
                 }
             }
-            return count( $ids );
+
+            // Returning successful mutations instead of queried IDs prevents an
+            // endless loop if another plugin vetoes deleting/trashing a comment.
+            return $changed;
         };
 
         switch ( $scope ) {
             case 'spam':
-                while ( $batch_delete( [ 'status' => 'spam' ] ) > 0 ) {}
+                while ( $batch_delete( [ 'status' => 'spam' ] ) > 0 ) {
+                    // Process in bounded batches.
+                }
                 break;
+
             case 'pending':
-                while ( $batch_delete( [ 'status' => 'hold' ] ) > 0 ) {}
+                while ( $batch_delete( [ 'status' => 'hold' ] ) > 0 ) {
+                    // Process in bounded batches.
+                }
                 break;
+
             case 'trash':
-                while ( $batch_delete( [ 'status' => 'trash' ] ) > 0 ) {}
+                while ( $batch_delete( [ 'status' => 'trash' ] ) > 0 ) {
+                    // Emptying Trash is always a permanent delete.
+                }
                 break;
+
             case 'all':
-            default:
-                while ( $batch_delete( [ 'status' => 'approve' ] ) > 0 ) {}
-                while ( $batch_delete( [ 'status' => 'hold' ] ) > 0 ) {}
-                while ( $batch_delete( [ 'status' => 'spam' ] ) > 0 ) {}
-                while ( $batch_delete( [ 'status' => 'trash' ] ) > 0 ) {}
+                while ( $batch_delete( [ 'status' => 'approve' ] ) > 0 ) {
+                    // Process in bounded batches.
+                }
+                while ( $batch_delete( [ 'status' => 'hold' ] ) > 0 ) {
+                    // Process in bounded batches.
+                }
+                while ( $batch_delete( [ 'status' => 'spam' ] ) > 0 ) {
+                    // Process in bounded batches.
+                }
+
+                // Important: when the requested strategy is reversible, comments
+                // moved to Trash above must remain there. Only permanent cleanup
+                // should empty Trash in the same operation.
+                if ( 'delete' === $strategy ) {
+                    while ( $batch_delete( [ 'status' => 'trash' ] ) > 0 ) {
+                        // Process in bounded batches.
+                    }
+                }
                 break;
         }
+
         return $deleted;
     }
 
     /**
      * Cuenta cuántos comentarios serían afectados (sin borrar).
      *
-     * @param string   $scope
-     * @param string[] $types
+     * @param string   $scope Alcance solicitado.
+     * @param string[] $types Tipos de post a limitar.
      * @return int
      */
     public static function count( $scope, array $types = [] ) {
@@ -75,15 +113,25 @@ class DeleteService {
             'trash'   => 'trash',
             'all'     => 'all',
         ];
-        $status = isset( $map[ $scope ] ) ? $map[ $scope ] : 'all';
+
+        $status = isset( $map[ $scope ] ) ? $map[ $scope ] : 'spam';
+
         if ( 'all' === $status && empty( $types ) ) {
-            $c = wp_count_comments();
-            return (int) $c->total_comments;
+            $counts = wp_count_comments();
+            return (int) $counts->total_comments;
         }
-        $args = [ 'status' => $status, 'count' => true, 'orderby' => 'comment_ID', 'order' => 'ASC' ];
+
+        $args = [
+            'status'  => $status,
+            'count'   => true,
+            'orderby' => 'comment_ID',
+            'order'   => 'ASC',
+        ];
+
         if ( ! empty( $types ) ) {
             $args['post_type'] = $types;
         }
+
         return (int) get_comments( $args );
     }
 }
