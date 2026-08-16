@@ -3,7 +3,7 @@
 **Disable WordPress comments completely — without breaking WooCommerce reviews when you still need them.**
 
 [![Quality](https://github.com/akelaonline/No-comments/actions/workflows/ci.yml/badge.svg)](https://github.com/akelaonline/No-comments/actions/workflows/ci.yml)
-![Version](https://img.shields.io/badge/version-1.13.0-111827)
+![Version](https://img.shields.io/badge/version-1.14.0-111827)
 ![WordPress](https://img.shields.io/badge/WordPress-6.0%2B-21759b)
 ![PHP](https://img.shields.io/badge/PHP-7.4%E2%80%938.5-777bb4)
 ![License](https://img.shields.io/badge/license-GPL--2.0--or--later-16a34a)
@@ -316,13 +316,12 @@ For security issues, do not publish exploit details in a normal issue. Follow [`
 
 ## Author
 
-Created and maintained by **Akela** ([`@akelaonline`](https://www.instagram.com/akelaonline/)).
+Created and maintained by **Akela** ([`@akelaonline`](https://github.com/akelaonline)).
 
 WordPress plugins in the Akela ecosystem: **Akela SEO** and **Tucho Performance**.
 
-- Instagram: [@akelaonline](https://www.instagram.com/akelaonline/)
-- Web: [akela.dev](https://akela.dev/seo)
 - GitHub: [akelaonline](https://github.com/akelaonline)
+- Instagram: [@akelaonline](https://www.instagram.com/akelaonline/)
 
 ## License
 

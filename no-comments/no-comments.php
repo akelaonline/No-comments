@@ -2,7 +2,7 @@
 /**
  * Plugin Name: NO Comments
  * Description: Cierra comentarios y pings en todo el sitio y limpia comentarios de forma segura, con WooCommerce, Multisite, REST, WP-CLI y limpieza automática.
- * Version: 1.13.0
+ * Version: 1.14.0
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * Author: Akela (@akelaonline)
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit; // Salir si se accede directamente.
 }
 
-define( 'NO_COMMENTS_VERSION', '1.13.0' );
+define( 'NO_COMMENTS_VERSION', '1.14.0' );
 define( 'NO_COMMENTS_FILE', __FILE__ );
 define( 'NO_COMMENTS_PATH', plugin_dir_path( __FILE__ ) );
 define( 'NO_COMMENTS_URL', plugin_dir_url( __FILE__ ) );
@@ -476,7 +476,10 @@ final class No_Comments_Plugin {
         $active_tab = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : 'disable';
 
         echo '<div class="wrap" id="no-comments-admin">';
+        echo '<div class="nc-head">';
         echo '<h1>' . esc_html__( 'NO Comments', 'no-comments' ) . '</h1>';
+        echo '<span class="nc-version">v' . esc_html( NO_COMMENTS_VERSION ) . '</span>';
+        echo '</div>';
 
         // Help tab
         if ( function_exists( 'get_current_screen' ) ) {
@@ -505,11 +508,10 @@ final class No_Comments_Plugin {
         if ( 'delete' === $active_tab ) {
             self::render_delete_tab();
         } else {
-            // Indicador de estado
-            $enabled = self::is_enabled();
-            $status_color = $enabled ? '#065f46' : '#5a5a5a';
-            $status_text  = $enabled ? __( 'Comentarios deshabilitados globalmente', 'no-comments' ) : __( 'Comentarios habilitados (comportamiento por defecto)', 'no-comments' );
-            echo '<div style="margin:12px 0;padding:8px 12px;border-left:4px solid ' . esc_attr( $status_color ) . ';background:#fff;">' . esc_html( $status_text ) . '</div>';
+            // Indicador de estado.
+            $enabled     = self::is_enabled();
+            $status_text = $enabled ? __( 'Comentarios deshabilitados globalmente', 'no-comments' ) : __( 'Comentarios habilitados (comportamiento por defecto)', 'no-comments' );
+            echo '<div class="nc-status nc-status-' . ( $enabled ? 'on' : 'off' ) . '"><span class="nc-dot" aria-hidden="true"></span>' . esc_html( $status_text ) . '</div>';
 
             // Aviso si los ajustes están forzados por la red.
             $network_enforced = false;
@@ -519,28 +521,28 @@ final class No_Comments_Plugin {
                 if ( $network_enforced ) {
                     $net_url = esc_url( network_admin_url( 'settings.php?page=' . self::PAGE_SLUG . '-network' ) );
                     // translators: %s: URL to the network-level NO Comments settings page.
-                    echo '<div class="notice notice-info" style="margin:12px 0 0 0;"><p>' . wp_kses_post( sprintf( __( 'Estos ajustes están controlados por la red. Gestiona los valores desde <a href="%s">NO Comments (Network)</a>.', 'no-comments' ), esc_url( $net_url ) ) ) . '</p></div>';
+                    echo '<div class="notice notice-info"><p>' . wp_kses_post( sprintf( __( 'Estos ajustes están controlados por la red. Gestiona los valores desde <a href="%s">NO Comments (Network)</a>.', 'no-comments' ), esc_url( $net_url ) ) ) . '</p></div>';
                 }
             }
 
             if ( ! $network_enforced ) {
-                echo '<form action="options.php" method="post">';
+                echo '<div class="nc-card"><form action="options.php" method="post" class="nc-settings-form">';
                 settings_fields( self::SETTINGS_GROUP );
                 do_settings_sections( self::PAGE_SLUG );
                 submit_button();
-                echo '</form>';
+                echo '</form></div>';
             }
 
             self::render_transfer_card();
         }
         // Branding footer
         echo '<hr style="margin-top:24px;opacity:.25;" />';
-        echo '<p style="color:#475569;">' . wp_kses_post( sprintf(
-            /* translators: 1: author handle, 2: Instagram profile URL, 3: website URL. */
-            __( 'Creado por Akela (%1$s) — <a href="%2$s" target="_blank">Instagram</a> · <a href="%3$s" target="_blank">akela.dev</a>', 'no-comments' ),
+        echo '<p class="nc-brand">' . wp_kses_post( sprintf(
+            /* translators: 1: author handle, 2: GitHub profile URL, 3: Instagram profile URL. */
+            __( 'Creado por Akela (%1$s) — <a href="%2$s" target="_blank">GitHub</a> · <a href="%3$s" target="_blank">Instagram</a>', 'no-comments' ),
             '@akelaonline',
-            'https://www.instagram.com/akelaonline/',
-            'https://akela.dev/seo'
+            'https://github.com/akelaonline',
+            'https://www.instagram.com/akelaonline/'
         ) ) . '</p>';
         echo '</div>';
     }
@@ -549,7 +551,7 @@ final class No_Comments_Plugin {
     private static function render_transfer_card() {
         $network_enforced = is_multisite() && class_exists( '\\NoComments\\Infrastructure\\OptionsRepository' ) && \NoComments\Infrastructure\OptionsRepository::is_enforced();
         $export_url = wp_nonce_url( admin_url( 'admin-post.php?action=no_comments_export' ), 'no_comments_export_action', '_wpnonce_no_comments_export' );
-        echo '<div class="card" style="margin-top:16px;">';
+        echo '<div class="nc-card nc-transfer">';
         echo '<h2>' . esc_html__( 'Importar / Exportar ajustes', 'no-comments' ) . '</h2>';
         echo '<p>' . esc_html__( 'Exporta los ajustes a un archivo JSON para respaldo o para clonarlos en otro sitio, e impórtalos desde un archivo exportado.', 'no-comments' ) . '</p>';
         echo '<p><a class="button button-secondary" href="' . esc_url( $export_url ) . '">' . esc_html__( 'Descargar ajustes (JSON)', 'no-comments' ) . '</a></p>';
@@ -752,6 +754,9 @@ final class No_Comments_Plugin {
     /** Filtro: pings_open (bloqueo global y/o cierre por antigüedad) */
     public static function filter_pings_open( $open, $post_id ) {
         if ( self::is_enabled() ) {
+            if ( self::is_exception_post( $post_id ) ) {
+                return $open; // Los tipos de excepción conservan pings.
+            }
             return false;
         }
         if ( self::post_is_too_old( $post_id ) ) {
@@ -838,86 +843,38 @@ final class No_Comments_Plugin {
     }
 
     /**
-     * Encola estilos mínimos para mejorar la UI de la página del plugin.
+     * Encola los assets de la página de ajustes del plugin (sitio y red).
+     *
+     * @param string $hook Hook actual de la pantalla admin.
      */
     public static function enqueue_admin_assets( $hook ) {
-        if ( 'settings_page_' . self::PAGE_SLUG !== $hook ) {
+        $allowed_hooks = [
+            'settings_page_' . self::PAGE_SLUG,
+            'settings_page_' . self::PAGE_SLUG . '-network',
+        ];
+        if ( ! in_array( $hook, $allowed_hooks, true ) ) {
             return;
         }
-        // Usamos wp-components como base para inyectar CSS.
-        wp_enqueue_style( 'wp-components' );
-        $css = '/* NO Comments UI */
-        #no-comments-admin .nav-tab-wrapper { margin-top: 12px; }
-        #no-comments-admin .card { border: 1px solid #e5e7eb; box-shadow: 0 1px 1px rgba(0,0,0,.04); padding: 8px 14px; }
-        #no-comments-admin .nc-counts { display:flex; gap:8px; flex-wrap:wrap; margin:8px 0 14px; padding:0; list-style:none; }
-        #no-comments-admin .nc-counts li { background:#f8fafc; border:1px solid #e5e7eb; border-radius:20px; padding:6px 10px; font-weight:600; color:#334155; cursor:pointer; }
-        #no-comments-admin .nc-counts .nc-spam { background:#fff1f2; border-color:#fecaca; color:#991b1b; }
-        #no-comments-admin .nc-counts .nc-trash { background:#fff7ed; border-color:#fed7aa; color:#9a3412; }
-        #no-comments-admin .nc-status-good { border-left-color:#065f46; }
-        #no-comments-admin .nc-status-muted { border-left-color:#5a5a5a; }
-        /* Segmented control */
-        #no-comments-admin .nc-segment { display:inline-flex; border:1px solid #CBD5E1; border-radius:8px; overflow:hidden; margin:6px 0 10px; }
-        #no-comments-admin .nc-segment button { background:#fff; border:0; padding:6px 10px; color:#334155; cursor:pointer; }
-        #no-comments-admin .nc-segment button + button { border-left:1px solid #CBD5E1; }
-        #no-comments-admin .nc-segment button[aria-pressed="true"] { background:#0ea5e9; color:#fff; }
-        /* Quick actions */
-        #no-comments-admin .nc-quick { display:flex; gap:8px; margin:6px 0 12px; }
-        #no-comments-admin .nc-quick .button-link { color:#0369a1; }
-        /* Hide only visually, keep accessible */
-        #no-comments-admin .nc-visually-hidden { position:absolute; left:-9999px; }
-        /* Notices a11y */
-        #no-comments-admin .nc-result { margin-top:12px; }';
-        wp_add_inline_style( 'wp-components', $css );
-        // JS para interacción mejorada (segment control, quick actions, confirmación)
-        $js = 'document.addEventListener("DOMContentLoaded",function(){
-            var wrap=document.getElementById("no-comments-admin");
-            if(!wrap) return;
-            function selectScope(val){
-                var r=document.querySelector("input[name=delete_scope][value="+val+"]");
-                if(r){ r.checked=true; updateSegment(val); announce("Ámbito seleccionado: "+val); }
-            }
-            function updateSegment(val){
-                wrap.querySelectorAll(".nc-segment button").forEach(function(b){ b.setAttribute("aria-pressed", b.dataset.scope===val?"true":"false"); });
-            }
-            function announce(msg){ var live=wrap.querySelector("#nc-live"); if(live){ live.textContent=""; setTimeout(function(){ live.textContent=msg; }, 30);} }
-            // Counters clickeables
-            wrap.querySelectorAll(".nc-counts .nc-spam, .nc-counts .nc-pending, .nc-counts .nc-trash, .nc-counts .nc-total").forEach(function(li){
-                li.addEventListener("click", function(){
-                    var map={"nc-spam":"spam","nc-pending":"pending","nc-trash":"trash","nc-total":"all"};
-                    var cls=Array.from(li.classList).find(function(c){return map[c];});
-                    if(cls){ selectScope(map[cls]); }
-                });
-            });
-            // Segmented control
-            wrap.querySelectorAll(".nc-segment button").forEach(function(btn){
-                btn.addEventListener("click", function(e){ e.preventDefault(); selectScope(btn.dataset.scope); });
-            });
-            // Quick actions: impedir navegación y preseleccionar
-            wrap.querySelectorAll("a.nc-qa[data-scope]").forEach(function(a){
-                a.addEventListener("click", function(e){ e.preventDefault(); selectScope(a.dataset.scope); });
-            });
-            // Modal de confirmación básico
-            var form=wrap.querySelector("form[action$=admin-post.php]");
-            if(form){
-                form.addEventListener("submit", function(e){
-                    var dry=form.querySelector("input[name=dry_run]");
-                    var isDry=dry && dry.checked;
-                    if(isDry) return true;
-                    var conf=form.querySelector("input[name=confirm]");
-                    if(!conf || conf.value!=="DELETE"){ e.preventDefault(); alert("Debes escribir DELETE para confirmar."); conf&&conf.focus(); return false; }
-                    var scope=form.querySelector("input[name=delete_scope]:checked");
-                    var strategy=form.querySelector("input[name=delete_strategy]:checked");
-                    var reversible=strategy && strategy.value==="trash" && (!scope || scope.value!=="trash");
-                    var msg=reversible
-                        ? "¿Mover los comentarios seleccionados a la Papelera? Podrás restaurarlos después."
-                        : "¿Seguro que deseas ejecutar la limpieza ("+(scope?scope.value:"?")+")? Esta acción no se puede deshacer.";
-                    if(!window.confirm(msg)){ e.preventDefault(); return false; }
-                    var submitBtn=form.querySelector("button[type=\"submit\"], input[type=\"submit\"]");
-                    if(submitBtn){ submitBtn.setAttribute("disabled","disabled"); submitBtn.classList.add("is-busy"); if(submitBtn.tagName==="BUTTON"){ submitBtn.textContent="Ejecutando..."; } }
-                });
-            }
-        });';
-        wp_add_inline_script( 'jquery-core', $js );
+        wp_enqueue_style(
+            'no-comments-admin',
+            NO_COMMENTS_URL . 'assets/css/admin.css',
+            [],
+            NO_COMMENTS_VERSION
+        );
+        wp_enqueue_script(
+            'no-comments-admin',
+            NO_COMMENTS_URL . 'assets/js/admin.js',
+            [],
+            NO_COMMENTS_VERSION,
+            true
+        );
+        wp_localize_script( 'no-comments-admin', 'noCommentsAdmin', [
+            /* translators: %s: scope label (spam, pending, trash, all). */
+            'scopeSelected' => __( 'Ámbito seleccionado: %s', 'no-comments' ),
+            /* translators: %s: scope label. */
+            'confirmDelete' => __( '¿Seguro que deseas ejecutar la limpieza (%s)? Esta acción no se puede deshacer.', 'no-comments' ),
+            'confirmTrash'  => __( '¿Mover los comentarios seleccionados a la Papelera? Podrás restaurarlos después.', 'no-comments' ),
+        ] );
     }
 
     /** Reordenar submenú para mostrar antes de Discusión */
@@ -960,38 +917,44 @@ final class No_Comments_Plugin {
     /** Pestaña de borrado masivo */
     private static function render_delete_tab() {
         $counts = wp_count_comments();
-        echo '<div class="card">';
+
+        // Tarjeta de resumen con contadores clicables.
+        echo '<div class="nc-card">';
         echo '<h2>' . esc_html__( 'Delete Comments', 'no-comments' ) . '</h2>';
-        echo '<p>' . esc_html__( 'Estas acciones son destructivas. Te sugerimos hacer un respaldo antes de continuar.', 'no-comments' ) . '</p>';
+        echo '<p class="nc-muted">' . esc_html__( 'Estas acciones son destructivas. Te sugerimos hacer un respaldo antes de continuar.', 'no-comments' ) . '</p>';
 
-        echo '<ul class="nc-counts">';
-        echo '<li class="nc-approved">' . esc_html__( 'Aprobados', 'no-comments' ) . ': ' . intval( $counts->approved ) . '</li>';
-        echo '<li class="nc-pending">' . esc_html__( 'Pendientes', 'no-comments' ) . ': ' . intval( $counts->moderated ) . '</li>';
-        echo '<li class="nc-spam">' . esc_html__( 'Spam', 'no-comments' ) . ': ' . intval( $counts->spam ) . '</li>';
-        echo '<li class="nc-trash">' . esc_html__( 'Papelera', 'no-comments' ) . ': ' . intval( $counts->trash ) . '</li>';
-        echo '<li class="nc-total">' . esc_html__( 'Total', 'no-comments' ) . ': ' . intval( $counts->total_comments ) . '</li>';
-        echo '</ul>';
-        // Región aria-live para feedback
-        echo '<div id="nc-live" class="screen-reader-text" aria-live="polite"></div>';
-
-        $action_url = admin_url( 'admin-post.php' );
-
-        // Acciones rápidas (enlaces que preseleccionan alcance y tipos)
-        $base_delete_url = add_query_arg( [ 'page' => self::PAGE_SLUG, 'tab' => 'delete' ], admin_url( 'options-general.php' ) );
-        $quick = [
-            'spam'    => __( 'Solo Spam', 'no-comments' ),
-            'pending' => __( 'Solo Pendientes', 'no-comments' ),
-            'trash'   => __( 'Vaciar Papelera', 'no-comments' ),
-            'all'     => __( 'Todos', 'no-comments' ),
+        $stats = [
+            'approved' => [ __( 'Aprobados', 'no-comments' ), intval( $counts->approved ), '' ],
+            'pending'  => [ __( 'Pendientes', 'no-comments' ), intval( $counts->moderated ), 'nc-stat-pending' ],
+            'spam'     => [ __( 'Spam', 'no-comments' ), intval( $counts->spam ), 'nc-stat-spam' ],
+            'trash'    => [ __( 'Papelera', 'no-comments' ), intval( $counts->trash ), 'nc-stat-trash' ],
+            'total'    => [ __( 'Total', 'no-comments' ), intval( $counts->total_comments ), '' ],
         ];
-        echo '<div class="nc-quick">';
-        echo '<span class="button-link" style="line-height:30px;margin-right:8px;">' . esc_html__( 'Acciones rápidas:', 'no-comments' ) . '</span>';
-        foreach ( $quick as $sc => $label ) {
-            $cls = in_array( $sc, [ 'spam', 'trash' ], true ) ? 'button button-secondary' : 'button button-link';
-            echo '<a href="#" class="nc-qa ' . esc_attr( $cls ) . '" data-scope="' . esc_attr( $sc ) . '">' . esc_html( $label ) . '</a>';
+        $scope_map = [
+            'approved' => 'all',
+            'pending'  => 'pending',
+            'spam'     => 'spam',
+            'trash'    => 'trash',
+            'total'    => 'all',
+        ];
+
+        echo '<ul class="nc-stats">';
+        foreach ( $stats as $key => $stat ) {
+            /* translators: 1: stat label (e.g. Spam), 2: count. */
+            $stat_label = sprintf( __( '%1$s: %2$d', 'no-comments' ), $stat[0], $stat[1] );
+            echo '<li class="' . esc_attr( $stat[2] ) . '" data-scope="' . esc_attr( $scope_map[ $key ] ) . '" role="button" tabindex="0" aria-label="' . esc_attr( $stat_label ) . '">';
+            echo '<span class="nc-stat-value">' . esc_html( (string) $stat[1] ) . '</span>';
+            echo '<span class="nc-stat-label">' . esc_html( $stat[0] ) . '</span>';
+            echo '</li>';
         }
+        echo '</ul>';
+        // Región aria-live para feedback.
+        echo '<div id="nc-live" class="screen-reader-text" aria-live="polite"></div>';
         echo '</div>';
-        // Quick select via query params
+
+        // Tarjeta del formulario de limpieza.
+        echo '<div class="nc-card">';
+        $action_url = admin_url( 'admin-post.php' );
         $selected_scope = isset( $_GET['scope'] ) ? sanitize_key( wp_unslash( $_GET['scope'] ) ) : 'spam';
         $pre_types      = [];
         $types_query    = isset( $_GET['types'] ) ? sanitize_text_field( wp_unslash( $_GET['types'] ) ) : '';
@@ -999,60 +962,81 @@ final class No_Comments_Plugin {
             $pre_types = array_filter( array_map( 'sanitize_key', array_map( 'trim', explode( ',', $types_query ) ) ) );
         }
 
-        echo '<form method="post" action="' . esc_url( $action_url ) . '">';
+        echo '<form method="post" action="' . esc_url( $action_url ) . '" id="nc-delete-form">';
         wp_nonce_field( 'no_comments_delete_action', '_wpnonce_no_comments_delete' );
         echo '<input type="hidden" name="action" value="no_comments_delete" />';
 
-        // Segmented control (mejora visual, radios siguen para accesibilidad)
-        echo '<div class="nc-segment" role="group" aria-label="' . esc_attr__( 'Ámbito de borrado', 'no-comments' ) . '">';
-        foreach (
-            [
-                'spam'    => __( 'Spam', 'no-comments' ),
-                'pending' => __( 'Pendientes', 'no-comments' ),
-                'trash'   => __( 'Papelera', 'no-comments' ),
-                'all'     => __( 'Todos', 'no-comments' ),
-            ] as $sc => $lab
-        ) {
-            $pressed = $selected_scope === $sc ? 'true' : 'false';
-            echo '<button class="button" data-scope="' . esc_attr( $sc ) . '" aria-pressed="' . esc_attr( $pressed ) . '">' . esc_html( $lab ) . '</button>';
+        // Alcance: radios con estilo segmented (accesible por teclado/lector).
+        echo '<fieldset class="nc-field">';
+        echo '<legend>' . esc_html__( 'Ámbito de borrado', 'no-comments' ) . '</legend>';
+        echo '<div class="nc-segmented" role="radiogroup" aria-label="' . esc_attr__( 'Ámbito de borrado', 'no-comments' ) . '">';
+        $scopes = [
+            'spam'    => __( 'Spam', 'no-comments' ),
+            'pending' => __( 'Pendientes', 'no-comments' ),
+            'trash'   => __( 'Papelera', 'no-comments' ),
+            'all'     => __( 'Todos', 'no-comments' ),
+        ];
+        foreach ( $scopes as $value => $label ) {
+            echo '<input type="radio" id="nc-scope-' . esc_attr( $value ) . '" name="delete_scope" value="' . esc_attr( $value ) . '" ' . checked( $selected_scope, $value, false ) . ' />'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- checked() returns a safe HTML attribute.
+            echo '<label for="nc-scope-' . esc_attr( $value ) . '">' . esc_html( $label ) . '</label>';
         }
         echo '</div>';
+        echo '<p class="nc-field-hint">' . esc_html__( 'También podés clickear los contadores de arriba para preseleccionar el alcance.', 'no-comments' ) . '</p>';
+        echo '</fieldset>';
 
-        echo '<p><label><input type="radio" name="delete_scope" value="spam" ' . checked( $selected_scope, 'spam', false ) . '> ' . esc_html__( 'Eliminar solo Spam', 'no-comments' ) . '</label></p>';
-        echo '<p><label><input type="radio" name="delete_scope" value="pending" ' . checked( $selected_scope, 'pending', false ) . '> ' . esc_html__( 'Eliminar Pendientes (moderación)', 'no-comments' ) . '</label></p>';
-        echo '<p><label><input type="radio" name="delete_scope" value="trash" ' . checked( $selected_scope, 'trash', false ) . '> ' . esc_html__( 'Vaciar Papelera', 'no-comments' ) . '</label></p>';
-        echo '<p><label><input type="radio" name="delete_scope" value="all" ' . checked( $selected_scope, 'all', false ) . '> ' . esc_html__( 'Eliminar TODOS los comentarios', 'no-comments' ) . '</label></p>';
-
-        // Filtro por tipos de contenido
+        // Filtro por tipos de contenido.
         $types = get_post_types( [ 'public' => true ], 'objects' );
         if ( ! empty( $types ) ) {
-            echo '<fieldset style="margin:10px 0 6px;">';
-            echo '<legend style="font-weight:600;">' . esc_html__( 'Limitar por tipos de contenido (opcional)', 'no-comments' ) . '</legend>';
+            echo '<fieldset class="nc-field">';
+            echo '<legend>' . esc_html__( 'Limitar por tipos de contenido', 'no-comments' ) . '</legend>';
+            echo '<p class="nc-field-hint">' . esc_html__( 'Si no seleccionás ningún tipo, se aplica a todos.', 'no-comments' ) . '</p>';
+            echo '<div class="nc-chips">';
             foreach ( $types as $slug => $obj ) {
                 $label = isset( $obj->labels->singular_name ) ? $obj->labels->singular_name : $slug;
-                echo '<label style="display:inline-block;margin:2px 10px 2px 0;">';
-                $ck = checked( in_array( $slug, $pre_types, true ), true, false );
-                echo '<input type="checkbox" name="delete_types[]" value="' . esc_attr( $slug ) . '" ' . $ck . '> ' . esc_html( $label ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- checked() returns a safe HTML attribute.
-                echo '</label>';
+                echo '<input type="checkbox" id="nc-type-' . esc_attr( $slug ) . '" name="delete_types[]" value="' . esc_attr( $slug ) . '" ' . checked( in_array( $slug, $pre_types, true ), true, false ) . ' />'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- checked() returns a safe HTML attribute.
+                echo '<label for="nc-type-' . esc_attr( $slug ) . '">' . esc_html( $label ) . '</label>';
             }
-            echo '<p class="description">' . esc_html__( 'Si no seleccionas ningún tipo, se aplicará a todos.', 'no-comments' ) . '</p>';
+            echo '</div>';
             echo '</fieldset>';
         }
 
-        // Estrategia de borrado
-        echo '<fieldset style="margin:10px 0 6px;">';
-        echo '<legend style="font-weight:600;">' . esc_html__( 'Estrategia', 'no-comments' ) . '</legend>';
-        echo '<label style="display:block;margin:2px 0;" title="' . esc_attr__( 'Borra definitivamente (incluida la papelera si el alcance es Papelera o Todos).', 'no-comments' ) . '"><input type="radio" name="delete_strategy" value="delete" checked> ' . esc_html__( 'Borrar permanentemente', 'no-comments' ) . '</label>';
-        echo '<label style="display:block;margin:2px 0;" title="' . esc_attr__( 'Mueve a Papelera cuando aplique. Al vaciar Papelera se fuerza borrado definitivo.', 'no-comments' ) . '"><input type="radio" name="delete_strategy" value="trash"> ' . esc_html__( 'Mover a Papelera (reversible)', 'no-comments' ) . '</label>';
+        // Estrategia de borrado.
+        echo '<fieldset class="nc-field">';
+        echo '<legend>' . esc_html__( 'Estrategia', 'no-comments' ) . '</legend>';
+        echo '<div class="nc-strategy">';
+        echo '<input type="radio" id="nc-strategy-delete" name="delete_strategy" value="delete" checked />';
+        echo '<label for="nc-strategy-delete">';
+        echo '<span class="nc-strategy-title">' . esc_html__( 'Borrar permanentemente', 'no-comments' ) . '</span>';
+        echo '<span class="nc-strategy-desc">' . esc_html__( 'Elimina los comentarios de forma definitiva (incluye la Papelera cuando el alcance lo requiera).', 'no-comments' ) . '</span>';
+        echo '</label>';
+        echo '<input type="radio" id="nc-strategy-trash" name="delete_strategy" value="trash" />';
+        echo '<label for="nc-strategy-trash">';
+        echo '<span class="nc-strategy-title">' . esc_html__( 'Mover a Papelera', 'no-comments' ) . '</span>';
+        echo '<span class="nc-strategy-desc">' . esc_html__( 'Acción reversible: los comentarios quedan en Papelera. Vaciar Papelera siempre es definitivo.', 'no-comments' ) . '</span>';
+        echo '</label>';
+        echo '</div>';
         echo '</fieldset>';
 
-        echo '<p><label><input type="checkbox" name="dry_run" value="1" checked> ' . esc_html__( 'Simulación (dry‑run): solo calcula y no borra', 'no-comments' ) . '</label></p>';
-        echo '<p><label>' . esc_html__( 'Escribe DELETE para confirmar', 'no-comments' ) . ' <input type="text" name="confirm" value="" placeholder="DELETE" /></label></p>';
-        submit_button( __( 'Ejecutar limpieza', 'no-comments' ), 'delete' );
+        // Dry-run y confirmación.
+        echo '<div class="nc-row">';
+        echo '<div class="nc-switch">';
+        echo '<label><input type="checkbox" name="dry_run" value="1" checked /> ' . esc_html__( 'Simulación (dry-run): solo calcula y no borra', 'no-comments' ) . '</label>';
+        echo '<p class="nc-field-hint">' . esc_html__( 'Desmarcá esta opción para ejecutar la limpieza real.', 'no-comments' ) . '</p>';
+        echo '</div>';
+        echo '<div>';
+        echo '<label class="nc-confirm-label" for="nc-confirm">' . esc_html__( 'Escribí DELETE para confirmar', 'no-comments' ) . '</label>';
+        echo '<input type="text" id="nc-confirm" name="confirm" value="" placeholder="DELETE" class="nc-confirm-input" autocomplete="off" />';
+        echo '<div class="nc-confirm-error" hidden>' . esc_html__( 'Debes escribir DELETE para confirmar.', 'no-comments' ) . '</div>';
+        echo '</div>';
+        echo '</div>';
+
+        echo '<div class="nc-actions">';
+        submit_button( __( 'Ejecutar limpieza', 'no-comments' ), 'delete primary large' );
+        echo '</div>';
         echo '</form>';
         echo '</div>';
 
-        // Mensajes de resultado con detalle
+        // Mensajes de resultado con detalle.
         if ( isset( $_GET['deleted'] ) && isset( $_GET['scope'] ) ) {
             $deleted  = absint( $_GET['deleted'] );
             $scope    = sanitize_key( wp_unslash( $_GET['scope'] ) );
@@ -1060,7 +1044,7 @@ final class No_Comments_Plugin {
             $strategy = isset( $_GET['strategy'] ) ? sanitize_key( wp_unslash( $_GET['strategy'] ) ) : '';
             $types_q  = isset( $_GET['types'] ) ? sanitize_text_field( wp_unslash( $_GET['types'] ) ) : '';
             $types_h  = $types_q ? $types_q : __( 'todos', 'no-comments' );
-            $msg      = $sim ? __( 'Simulación (dry‑run): se borrarían', 'no-comments' ) : __( 'Eliminados', 'no-comments' );
+            $msg      = $sim ? __( 'Simulación (dry-run): se borrarían', 'no-comments' ) : __( 'Eliminados', 'no-comments' );
             printf( '<div class="notice %s nc-result" role="status" aria-live="polite"><p>%s %d — %s: %s · %s: %s · %s: %s.</p></div>',
                 $sim ? 'notice-info' : 'updated',
                 esc_html( $msg ),
@@ -1071,7 +1055,7 @@ final class No_Comments_Plugin {
             );
         }
         if ( isset( $_GET['msg'] ) && 'confirm' === $_GET['msg'] ) {
-            echo '<div class="notice notice-warning"><p>' . esc_html__( 'Debes escribir DELETE para confirmar.', 'no-comments' ) . '</p></div>';
+            echo '<div class="notice notice-warning nc-result"><p>' . esc_html__( 'Debes escribir DELETE para confirmar.', 'no-comments' ) . '</p></div>';
         }
     }
 
@@ -1311,6 +1295,10 @@ final class No_Comments_Plugin {
         if ( ! is_admin_bar_showing() || ! current_user_can( 'manage_options' ) ) {
             return;
         }
+        // Con la red en modo enforce el toggle local no tiene efecto: no se muestra.
+        if ( is_multisite() && class_exists( '\\NoComments\\Infrastructure\\OptionsRepository' ) && \NoComments\Infrastructure\OptionsRepository::is_enforced() ) {
+            return;
+        }
         $enabled = self::is_enabled();
         $text    = $enabled ? __( 'NO Comments: ON', 'no-comments' ) : __( 'NO Comments: OFF', 'no-comments' );
         $action  = wp_nonce_url( admin_url( 'admin-post.php?action=no_comments_toggle' ), 'no_comments_toggle_action', '_wpnonce_no_comments_toggle' );
@@ -1357,8 +1345,8 @@ final class No_Comments_Plugin {
      */
     public static function plugin_row_meta( $links, $file ) {
         if ( plugin_basename( __FILE__ ) === $file ) {
+            $links[] = '<a href="https://github.com/akelaonline" target="_blank">' . esc_html__( 'GitHub', 'no-comments' ) . '</a>';
             $links[] = '<a href="https://www.instagram.com/akelaonline/" target="_blank">' . esc_html__( 'Instagram', 'no-comments' ) . '</a>';
-            $links[] = '<a href="https://akela.dev/seo" target="_blank">akela.dev</a>';
         }
         return $links;
     }

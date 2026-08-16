@@ -1,11 +1,11 @@
 === NO Comments ===
 Contributors: akelaonline
-Donate link: https://akela.dev/seo
+Donate link: https://github.com/akelaonline
 Tags: comments, disable comments, discussion, spam, delete comments
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.13.0
+Stable tag: 1.14.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -149,6 +149,14 @@ Sí. La opción de compatibilidad mantiene reviews de productos y respeta si un 
 Sí. Incluye ajustes de red y un modo `enforce` para aplicar una configuración común a todos los sitios.
 
 == Changelog ==
+
+= 1.14.0 =
+* UI: rediseño profesional unificado entre pestañas (tarjetas, estadísticas clicables, segmented control accesible, chips de tipos, tarjetas de estrategia) y 100% responsive.
+* UI: assets reales en `assets/` (CSS/JS) en lugar de estilos y scripts inline; strings del JS localizadas vía `wp_localize_script`.
+* Fix: la importación de ajustes desde la UI quedaba bloqueada por el guard de confirmación del formulario de borrado (JS apuntaba al primer form hacia `admin-post.php`).
+* Fix: `pings_open` ahora respeta los tipos de excepción (antes cerraba pings también en tipos con comentarios activos).
+* Fix: el toggle de la barra de administración ya no se muestra cuando la red fuerza los ajustes (`enforce`).
+* Branding: enlaces de autoría apuntan a github.com/akelaonline e Instagram (eliminado akela.dev).
 
 = 1.13.0 =
 * Nuevo: excepciones por tipo de contenido — los tipos seleccionados conservan comentarios y pings con el bloqueo global activo (menú, consultas y formularios). "product" se incluye automáticamente cuando la compatibilidad WooCommerce está activa.

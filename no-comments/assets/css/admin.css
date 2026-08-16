@@ -1,0 +1,572 @@
+/**
+ * NO Comments — shared admin design system (Disable + Delete tabs).
+ * Responsive, accessible, consistent with the WordPress admin look.
+ */
+
+#no-comments-admin {
+	max-width: 980px;
+}
+
+#no-comments-admin *,
+#no-comments-admin *::before,
+#no-comments-admin *::after {
+	box-sizing: border-box;
+}
+
+/* ---------------------------------------------------------------------------
+ * Header
+ * ------------------------------------------------------------------------- */
+#no-comments-admin .nc-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	flex-wrap: wrap;
+	margin: 4px 0 16px;
+}
+
+#no-comments-admin .nc-head h1 {
+	margin: 0;
+	font-size: 23px;
+	font-weight: 600;
+	line-height: 1.2;
+}
+
+#no-comments-admin .nc-version {
+	font-size: 12px;
+	font-weight: 600;
+	color: #64748b;
+	background: #f1f5f9;
+	border: 1px solid #e2e8f0;
+	border-radius: 999px;
+	padding: 3px 10px;
+	white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------------------
+ * Tabs
+ * ------------------------------------------------------------------------- */
+#no-comments-admin .nav-tab-wrapper {
+	border-bottom: 1px solid #e2e8f0;
+	margin-bottom: 20px;
+	padding-bottom: 0;
+}
+
+#no-comments-admin .nav-tab {
+	margin-left: 0;
+	margin-right: 6px;
+	font-weight: 500;
+	border-radius: 8px 8px 0 0;
+}
+
+/* ---------------------------------------------------------------------------
+ * Status pill
+ * ------------------------------------------------------------------------- */
+#no-comments-admin .nc-status {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 14px;
+	border-radius: 999px;
+	font-weight: 600;
+	font-size: 13px;
+	margin: 0 0 16px;
+}
+
+#no-comments-admin .nc-status .nc-dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: currentColor;
+}
+
+#no-comments-admin .nc-status-on {
+	background: #ecfdf5;
+	color: #047857;
+	border: 1px solid #a7f3d0;
+}
+
+#no-comments-admin .nc-status-off {
+	background: #f1f5f9;
+	color: #475569;
+	border: 1px solid #e2e8f0;
+}
+
+/* ---------------------------------------------------------------------------
+ * Cards
+ * ------------------------------------------------------------------------- */
+#no-comments-admin .nc-card {
+	background: #fff;
+	border: 1px solid #e2e8f0;
+	border-radius: 12px;
+	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+	padding: 22px 24px;
+	margin-bottom: 16px;
+}
+
+#no-comments-admin .nc-card h2 {
+	margin: 0 0 6px;
+	font-size: 15px;
+	font-weight: 600;
+	color: #0f172a;
+}
+
+#no-comments-admin .nc-muted {
+	color: #64748b;
+}
+
+/* ---------------------------------------------------------------------------
+ * Settings form (Disable tab)
+ * ------------------------------------------------------------------------- */
+#no-comments-admin .nc-settings-form .form-table {
+	margin-top: 0;
+}
+
+#no-comments-admin .nc-settings-form .form-table tr {
+	border-bottom: 1px solid #f1f5f9;
+}
+
+#no-comments-admin .nc-settings-form .form-table tr:last-child {
+	border-bottom: 0;
+}
+
+#no-comments-admin .nc-settings-form .form-table th {
+	width: 220px;
+	padding: 18px 16px 18px 0;
+	vertical-align: top;
+	font-weight: 600;
+}
+
+#no-comments-admin .nc-settings-form .form-table td {
+	padding: 18px 0;
+	vertical-align: top;
+}
+
+#no-comments-admin .nc-settings-form .form-table tr:first-child th,
+#no-comments-admin .nc-settings-form .form-table tr:first-child td {
+	padding-top: 4px;
+}
+
+#no-comments-admin .nc-settings-form .form-table tr:last-child th,
+#no-comments-admin .nc-settings-form .form-table tr:last-child td {
+	padding-bottom: 4px;
+}
+
+#no-comments-admin .nc-settings-form .description {
+	color: #64748b;
+}
+
+#no-comments-admin .nc-settings-form .button-primary {
+	margin-top: 8px;
+}
+
+/* ---------------------------------------------------------------------------
+ * Stats (Delete tab)
+ * ------------------------------------------------------------------------- */
+#no-comments-admin .nc-stats {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+	gap: 10px;
+	margin: 16px 0 0;
+	padding: 0;
+	list-style: none;
+}
+
+#no-comments-admin .nc-stats li {
+	border: 1px solid #e2e8f0;
+	border-radius: 10px;
+	padding: 12px 14px;
+	background: #f8fafc;
+	cursor: pointer;
+	transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+#no-comments-admin .nc-stats li:hover {
+	border-color: #0ea5e9;
+	box-shadow: 0 1px 3px rgba(14, 165, 233, 0.15);
+}
+
+#no-comments-admin .nc-stats li:active {
+	transform: scale(0.98);
+}
+
+#no-comments-admin .nc-stats li:focus-visible {
+	outline: 2px solid #0ea5e9;
+	outline-offset: 2px;
+}
+
+#no-comments-admin .nc-stats .nc-stat-value {
+	display: block;
+	font-size: 22px;
+	font-weight: 700;
+	line-height: 1.1;
+	color: #0f172a;
+}
+
+#no-comments-admin .nc-stats .nc-stat-label {
+	display: block;
+	font-size: 11px;
+	font-weight: 600;
+	color: #64748b;
+	margin-top: 3px;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+#no-comments-admin .nc-stats .nc-stat-spam .nc-stat-value {
+	color: #dc2626;
+}
+
+#no-comments-admin .nc-stats .nc-stat-pending .nc-stat-value {
+	color: #d97706;
+}
+
+#no-comments-admin .nc-stats .nc-stat-trash .nc-stat-value {
+	color: #9a3412;
+}
+
+/* ---------------------------------------------------------------------------
+ * Fieldsets
+ * ------------------------------------------------------------------------- */
+#no-comments-admin .nc-field {
+	border: 0;
+	margin: 0 0 18px;
+	padding: 0;
+}
+
+#no-comments-admin .nc-field legend {
+	font-weight: 600;
+	color: #0f172a;
+	padding: 0 0 8px;
+	font-size: 13px;
+}
+
+#no-comments-admin .nc-field-hint {
+	color: #64748b;
+	margin: 6px 0 0;
+	font-size: 12px;
+}
+
+/* ---------------------------------------------------------------------------
+ * Segmented control (radio-based, accessible)
+ * ------------------------------------------------------------------------- */
+#no-comments-admin .nc-segmented {
+	display: inline-flex;
+	flex-wrap: wrap;
+	border: 1px solid #e2e8f0;
+	border-radius: 10px;
+	overflow: hidden;
+	background: #fff;
+}
+
+#no-comments-admin .nc-segmented input {
+	position: absolute;
+	opacity: 0;
+	pointer-events: none;
+}
+
+#no-comments-admin .nc-segmented label {
+	display: inline-block;
+	padding: 9px 18px;
+	font-weight: 500;
+	font-size: 13px;
+	color: #475569;
+	cursor: pointer;
+	border-right: 1px solid #f1f5f9;
+	transition: background 0.15s ease, color 0.15s ease;
+	margin: 0;
+}
+
+#no-comments-admin .nc-segmented label:last-child {
+	border-right: 0;
+}
+
+#no-comments-admin .nc-segmented label:hover {
+	background: #f0f9ff;
+	color: #0369a1;
+}
+
+#no-comments-admin .nc-segmented input:checked + label {
+	background: #0ea5e9;
+	color: #fff;
+}
+
+#no-comments-admin .nc-segmented input[value="trash"]:checked + label {
+	background: #ea580c;
+}
+
+#no-comments-admin .nc-segmented input[value="all"]:checked + label {
+	background: #dc2626;
+}
+
+#no-comments-admin .nc-segmented input:focus-visible + label {
+	outline: 2px solid #0ea5e9;
+	outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------------------
+ * Chips (content types)
+ * ------------------------------------------------------------------------- */
+#no-comments-admin .nc-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+#no-comments-admin .nc-chips input {
+	position: absolute;
+	opacity: 0;
+	pointer-events: none;
+}
+
+#no-comments-admin .nc-chips label {
+	display: inline-block;
+	padding: 6px 12px;
+	border: 1px solid #e2e8f0;
+	border-radius: 999px;
+	font-size: 12px;
+	font-weight: 500;
+	color: #475569;
+	background: #fff;
+	cursor: pointer;
+	transition: all 0.15s ease;
+	margin: 0;
+}
+
+#no-comments-admin .nc-chips label:hover {
+	border-color: #0ea5e9;
+	color: #0369a1;
+}
+
+#no-comments-admin .nc-chips input:checked + label {
+	background: #e0f2fe;
+	border-color: #7dd3fc;
+	color: #0369a1;
+	font-weight: 600;
+}
+
+#no-comments-admin .nc-chips input:focus-visible + label {
+	outline: 2px solid #0ea5e9;
+	outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------------------
+ * Strategy radio cards
+ * ------------------------------------------------------------------------- */
+#no-comments-admin .nc-strategy {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+	gap: 10px;
+}
+
+#no-comments-admin .nc-strategy input {
+	position: absolute;
+	opacity: 0;
+	pointer-events: none;
+}
+
+#no-comments-admin .nc-strategy label {
+	display: block;
+	border: 1px solid #e2e8f0;
+	border-radius: 10px;
+	padding: 12px 14px;
+	cursor: pointer;
+	background: #fff;
+	transition: all 0.15s ease;
+}
+
+#no-comments-admin .nc-strategy label:hover {
+	border-color: #0ea5e9;
+}
+
+#no-comments-admin .nc-strategy input:checked + label {
+	border-color: #0ea5e9;
+	background: #f0f9ff;
+	box-shadow: 0 0 0 1px #0ea5e9 inset;
+}
+
+#no-comments-admin .nc-strategy input:focus-visible + label {
+	outline: 2px solid #0ea5e9;
+	outline-offset: 2px;
+}
+
+#no-comments-admin .nc-strategy .nc-strategy-title {
+	display: block;
+	font-weight: 600;
+	font-size: 13px;
+	color: #0f172a;
+}
+
+#no-comments-admin .nc-strategy input:checked + label .nc-strategy-title {
+	color: #0369a1;
+}
+
+#no-comments-admin .nc-strategy .nc-strategy-desc {
+	display: block;
+	font-size: 12px;
+	color: #64748b;
+	margin-top: 2px;
+}
+
+/* ---------------------------------------------------------------------------
+ * Dry-run / confirm row
+ * ------------------------------------------------------------------------- */
+#no-comments-admin .nc-row {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 16px;
+	align-items: end;
+}
+
+#no-comments-admin .nc-switch > label {
+	font-weight: 500;
+	font-size: 13px;
+	color: #0f172a;
+}
+
+#no-comments-admin .nc-confirm-label {
+	display: block;
+	font-weight: 500;
+	font-size: 13px;
+	color: #0f172a;
+	margin-bottom: 4px;
+}
+
+#no-comments-admin .nc-confirm-input {
+	width: 100%;
+	max-width: 260px;
+}
+
+#no-comments-admin .nc-confirm-error {
+	color: #dc2626;
+	font-size: 12px;
+	font-weight: 600;
+	margin-top: 6px;
+}
+
+/* ---------------------------------------------------------------------------
+ * Actions / submit
+ * ------------------------------------------------------------------------- */
+#no-comments-admin .nc-actions {
+	margin-top: 20px;
+	padding-top: 18px;
+	border-top: 1px solid #f1f5f9;
+}
+
+#no-comments-admin .nc-actions .button-primary {
+	min-height: 40px;
+	padding: 0 26px;
+	font-weight: 600;
+}
+
+#no-comments-admin .nc-actions .button.is-busy {
+	opacity: 0.6;
+	cursor: wait;
+}
+
+/* ---------------------------------------------------------------------------
+ * Notices / results
+ * ------------------------------------------------------------------------- */
+#no-comments-admin .nc-result {
+	margin-top: 16px;
+}
+
+/* ---------------------------------------------------------------------------
+ * Transfer card
+ * ------------------------------------------------------------------------- */
+#no-comments-admin .nc-transfer .button-secondary {
+	margin-bottom: 6px;
+}
+
+#no-comments-admin .nc-transfer input[type="file"] {
+	margin: 6px 0;
+}
+
+/* ---------------------------------------------------------------------------
+ * Brand footer
+ * ------------------------------------------------------------------------- */
+#no-comments-admin .nc-brand {
+	color: #64748b;
+	font-size: 12px;
+}
+
+#no-comments-admin .nc-brand a {
+	color: #475569;
+	text-decoration: none;
+}
+
+#no-comments-admin .nc-brand a:hover {
+	color: #0ea5e9;
+}
+
+/* ---------------------------------------------------------------------------
+ * Focus visibility
+ * ------------------------------------------------------------------------- */
+#no-comments-admin a:focus,
+#no-comments-admin button:focus {
+	box-shadow: 0 0 0 1px #0ea5e9, 0 0 0 3px rgba(14, 165, 233, 0.25);
+}
+
+/* ---------------------------------------------------------------------------
+ * Responsive
+ * ------------------------------------------------------------------------- */
+@media (max-width: 782px) {
+	#no-comments-admin .nc-settings-form .form-table th,
+	#no-comments-admin .nc-settings-form .form-table td {
+		display: block;
+		width: auto;
+		padding: 6px 0;
+	}
+
+	#no-comments-admin .nc-settings-form .form-table th {
+		padding-top: 14px;
+	}
+
+	#no-comments-admin .nc-row {
+		grid-template-columns: 1fr;
+	}
+
+	#no-comments-admin .nc-strategy {
+		grid-template-columns: 1fr;
+	}
+}
+
+@media (max-width: 480px) {
+	#no-comments-admin .nc-card {
+		padding: 16px;
+	}
+
+	#no-comments-admin .nc-stats {
+		grid-template-columns: repeat(2, 1fr);
+	}
+
+	#no-comments-admin .nc-segmented {
+		display: grid;
+		grid-template-columns: repeat(2, 1fr);
+		gap: 1px;
+		width: 100%;
+		border: 1px solid #e2e8f0;
+		background: #e2e8f0; /* separadores entre celdas */
+	}
+
+	#no-comments-admin .nc-segmented label {
+		border-right: 0;
+		border-bottom: 0;
+		background: #fff;
+		text-align: center;
+		padding: 10px 6px;
+	}
+
+	#no-comments-admin .nc-segmented input:checked + label {
+		background: #0ea5e9;
+		color: #fff;
+	}
+
+	#no-comments-admin .nc-segmented input[value="trash"]:checked + label {
+		background: #ea580c;
+	}
+
+	#no-comments-admin .nc-segmented input[value="all"]:checked + label {
+		background: #dc2626;
+	}
+}

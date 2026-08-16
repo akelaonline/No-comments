@@ -2,14 +2,14 @@
 # This file is distributed under the GPLv2 or later.
 msgid ""
 msgstr ""
-"Project-Id-Version: NO Comments 1.13.0\n"
+"Project-Id-Version: NO Comments 1.14.0\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/no-comments\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-08-16T19:19:23+00:00\n"
+"POT-Creation-Date: 2026-08-16T20:38:18+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 "X-Domain: no-comments\n"
@@ -18,10 +18,10 @@ msgstr ""
 #: no-comments.php
 #: no-comments.php:463
 #: no-comments.php:464
-#: no-comments.php:479
-#: no-comments.php:1294
-#: no-comments.php:1301
-#: no-comments.php:1588
+#: no-comments.php:480
+#: no-comments.php:1278
+#: no-comments.php:1285
+#: no-comments.php:1576
 msgid "NO Comments"
 msgstr ""
 
@@ -51,7 +51,7 @@ msgid "Semanal"
 msgstr ""
 
 #: no-comments.php:251
-#: no-comments.php:1351
+#: no-comments.php:1339
 msgid "Ajustes"
 msgstr ""
 
@@ -68,7 +68,7 @@ msgid "APIs"
 msgstr ""
 
 #: no-comments.php:276
-#: no-comments.php:1630
+#: no-comments.php:1618
 msgid "Compatibilidad"
 msgstr ""
 
@@ -117,7 +117,7 @@ msgid "Opciones de compatibilidad con plugins de terceros."
 msgstr ""
 
 #: no-comments.php:389
-#: no-comments.php:1632
+#: no-comments.php:1620
 msgid "Mantener reseñas de productos (WooCommerce)"
 msgstr ""
 
@@ -171,319 +171,325 @@ msgstr ""
 msgid "El borrado usa alcance Spam y borrado definitivo. Se registra la fecha y cantidad de cada ejecución."
 msgstr ""
 
-#: no-comments.php:487
+#: no-comments.php:490
 msgid "Ayuda"
 msgstr ""
 
-#: no-comments.php:488
+#: no-comments.php:491
 msgid "Usa \"Disable Comments\" para cerrar comentarios globalmente. En \"Delete Comments\" puedes simular (dry‑run) o ejecutar limpieza por alcance."
 msgstr ""
 
-#: no-comments.php:495
+#: no-comments.php:498
 msgid "Disable Comments"
 msgstr ""
 
-#: no-comments.php:496
-#: no-comments.php:964
+#: no-comments.php:499
+#: no-comments.php:923
 msgid "Delete Comments"
 msgstr ""
 
-#: no-comments.php:511
+#: no-comments.php:513
 msgid "Comentarios deshabilitados globalmente"
 msgstr ""
 
-#: no-comments.php:511
+#: no-comments.php:513
 msgid "Comentarios habilitados (comportamiento por defecto)"
 msgstr ""
 
 #. translators: %s: URL to the network-level NO Comments settings page.
-#: no-comments.php:522
+#: no-comments.php:524
 #, php-format
 msgid "Estos ajustes están controlados por la red. Gestiona los valores desde <a href=\"%s\">NO Comments (Network)</a>."
 msgstr ""
 
-#. translators: 1: author handle, 2: Instagram profile URL, 3: website URL.
-#: no-comments.php:540
+#. translators: 1: author handle, 2: GitHub profile URL, 3: Instagram profile URL.
+#: no-comments.php:542
 #, php-format
-msgid "Creado por Akela (%1$s) — <a href=\"%2$s\" target=\"_blank\">Instagram</a> · <a href=\"%3$s\" target=\"_blank\">akela.dev</a>"
-msgstr ""
-
-#: no-comments.php:553
-msgid "Importar / Exportar ajustes"
-msgstr ""
-
-#: no-comments.php:554
-msgid "Exporta los ajustes a un archivo JSON para respaldo o para clonarlos en otro sitio, e impórtalos desde un archivo exportado."
+msgid "Creado por Akela (%1$s) — <a href=\"%2$s\" target=\"_blank\">GitHub</a> · <a href=\"%3$s\" target=\"_blank\">Instagram</a>"
 msgstr ""
 
 #: no-comments.php:555
-msgid "Descargar ajustes (JSON)"
+msgid "Importar / Exportar ajustes"
+msgstr ""
+
+#: no-comments.php:556
+msgid "Exporta los ajustes a un archivo JSON para respaldo o para clonarlos en otro sitio, e impórtalos desde un archivo exportado."
 msgstr ""
 
 #: no-comments.php:557
+msgid "Descargar ajustes (JSON)"
+msgstr ""
+
+#: no-comments.php:559
 msgid "La importación de ajustes de sitio está desactivada porque la red controla esta configuración."
 msgstr ""
 
-#: no-comments.php:563
+#: no-comments.php:565
 msgid "Importar ajustes"
 msgstr ""
 
-#: no-comments.php:570
+#: no-comments.php:572
 msgid "Ajustes importados correctamente."
 msgstr ""
 
-#: no-comments.php:571
+#: no-comments.php:573
 msgid "No se recibió un archivo válido."
 msgstr ""
 
-#: no-comments.php:572
+#: no-comments.php:574
 msgid "El archivo es demasiado grande (máximo 512 KB)."
 msgstr ""
 
-#: no-comments.php:573
+#: no-comments.php:575
 msgid "El archivo debe ser un JSON válido exportado por NO Comments."
 msgstr ""
 
-#: no-comments.php:830
+#: no-comments.php:835
 msgid "Los comentarios están cerrados en todo el sitio."
 msgstr ""
 
-#: no-comments.php:834
+#: no-comments.php:839
 msgid "Los comentarios están cerrados para contenido antiguo."
 msgstr ""
 
-#: no-comments.php:965
+#. translators: %s: scope label (spam, pending, trash, all).
+#: no-comments.php:873
+#, php-format
+msgid "Ámbito seleccionado: %s"
+msgstr ""
+
+#. translators: %s: scope label.
+#: no-comments.php:875
+#, php-format
+msgid "¿Seguro que deseas ejecutar la limpieza (%s)? Esta acción no se puede deshacer."
+msgstr ""
+
+#: no-comments.php:876
+msgid "¿Mover los comentarios seleccionados a la Papelera? Podrás restaurarlos después."
+msgstr ""
+
+#: no-comments.php:924
 msgid "Estas acciones son destructivas. Te sugerimos hacer un respaldo antes de continuar."
 msgstr ""
 
-#: no-comments.php:968
+#: no-comments.php:927
 msgid "Aprobados"
 msgstr ""
 
-#: no-comments.php:969
-#: no-comments.php:1011
+#: no-comments.php:928
+#: no-comments.php:975
 msgid "Pendientes"
 msgstr ""
 
-#: no-comments.php:970
-#: no-comments.php:1010
+#: no-comments.php:929
+#: no-comments.php:974
 msgid "Spam"
 msgstr ""
 
-#: no-comments.php:971
-#: no-comments.php:1012
+#: no-comments.php:930
+#: no-comments.php:976
 msgid "Papelera"
 msgstr ""
 
-#: no-comments.php:972
+#: no-comments.php:931
 msgid "Total"
 msgstr ""
 
-#: no-comments.php:982
-msgid "Solo Spam"
+#. translators: 1: stat label (e.g. Spam), 2: count.
+#: no-comments.php:944
+#, php-format
+msgid "%1$s: %2$d"
 msgstr ""
 
-#: no-comments.php:983
-msgid "Solo Pendientes"
-msgstr ""
-
-#: no-comments.php:984
-#: no-comments.php:1023
-msgid "Vaciar Papelera"
-msgstr ""
-
-#: no-comments.php:985
-#: no-comments.php:1013
-msgid "Todos"
-msgstr ""
-
-#: no-comments.php:988
-msgid "Acciones rápidas:"
-msgstr ""
-
-#: no-comments.php:1007
+#: no-comments.php:971
+#: no-comments.php:972
 msgid "Ámbito de borrado"
 msgstr ""
 
-#: no-comments.php:1021
-msgid "Eliminar solo Spam"
+#: no-comments.php:977
+msgid "Todos"
 msgstr ""
 
-#: no-comments.php:1022
-msgid "Eliminar Pendientes (moderación)"
+#: no-comments.php:984
+msgid "También podés clickear los contadores de arriba para preseleccionar el alcance."
 msgstr ""
 
-#: no-comments.php:1024
-msgid "Eliminar TODOS los comentarios"
+#: no-comments.php:991
+msgid "Limitar por tipos de contenido"
 msgstr ""
 
-#: no-comments.php:1030
-msgid "Limitar por tipos de contenido (opcional)"
+#: no-comments.php:992
+msgid "Si no seleccionás ningún tipo, se aplica a todos."
 msgstr ""
 
-#: no-comments.php:1038
-msgid "Si no seleccionas ningún tipo, se aplicará a todos."
-msgstr ""
-
-#: no-comments.php:1044
+#: no-comments.php:1005
 msgid "Estrategia"
 msgstr ""
 
-#: no-comments.php:1045
-msgid "Borra definitivamente (incluida la papelera si el alcance es Papelera o Todos)."
-msgstr ""
-
-#: no-comments.php:1045
+#: no-comments.php:1009
 msgid "Borrar permanentemente"
 msgstr ""
 
-#: no-comments.php:1046
-msgid "Mueve a Papelera cuando aplique. Al vaciar Papelera se fuerza borrado definitivo."
+#: no-comments.php:1010
+msgid "Elimina los comentarios de forma definitiva (incluye la Papelera cuando el alcance lo requiera)."
 msgstr ""
 
-#: no-comments.php:1046
-msgid "Mover a Papelera (reversible)"
+#: no-comments.php:1014
+msgid "Mover a Papelera"
 msgstr ""
 
-#: no-comments.php:1049
-msgid "Simulación (dry‑run): solo calcula y no borra"
+#: no-comments.php:1015
+msgid "Acción reversible: los comentarios quedan en Papelera. Vaciar Papelera siempre es definitivo."
 msgstr ""
 
-#: no-comments.php:1050
-msgid "Escribe DELETE para confirmar"
+#: no-comments.php:1023
+msgid "Simulación (dry-run): solo calcula y no borra"
 msgstr ""
 
-#: no-comments.php:1051
-msgid "Ejecutar limpieza"
+#: no-comments.php:1024
+msgid "Desmarcá esta opción para ejecutar la limpieza real."
 msgstr ""
 
-#: no-comments.php:1062
-msgid "todos"
+#: no-comments.php:1027
+msgid "Escribí DELETE para confirmar"
 msgstr ""
 
-#: no-comments.php:1063
-msgid "Simulación (dry‑run): se borrarían"
-msgstr ""
-
-#: no-comments.php:1063
-msgid "Eliminados"
-msgstr ""
-
-#: no-comments.php:1068
-msgid "alcance"
-msgstr ""
-
-#: no-comments.php:1069
-msgid "tipos"
-msgstr ""
-
-#: no-comments.php:1070
-msgid "estrategia"
-msgstr ""
-
-#: no-comments.php:1074
+#: no-comments.php:1029
+#: no-comments.php:1058
 msgid "Debes escribir DELETE para confirmar."
 msgstr ""
 
-#: no-comments.php:1081
-#: no-comments.php:1224
-#: no-comments.php:1238
-#: no-comments.php:1331
-#: no-comments.php:1643
+#: no-comments.php:1034
+msgid "Ejecutar limpieza"
+msgstr ""
+
+#: no-comments.php:1046
+msgid "todos"
+msgstr ""
+
+#: no-comments.php:1047
+msgid "Simulación (dry-run): se borrarían"
+msgstr ""
+
+#: no-comments.php:1047
+msgid "Eliminados"
+msgstr ""
+
+#: no-comments.php:1052
+msgid "alcance"
+msgstr ""
+
+#: no-comments.php:1053
+msgid "tipos"
+msgstr ""
+
+#: no-comments.php:1054
+msgid "estrategia"
+msgstr ""
+
+#: no-comments.php:1065
+#: no-comments.php:1208
+#: no-comments.php:1222
+#: no-comments.php:1319
+#: no-comments.php:1631
 msgid "Permisos insuficientes."
 msgstr ""
 
-#: no-comments.php:1279
+#: no-comments.php:1263
 msgid "NO Comments: bloqueo de comentarios"
 msgstr ""
 
-#: no-comments.php:1292
+#: no-comments.php:1276
 msgid "NO Comments está bloqueando comentarios globalmente"
 msgstr ""
 
-#: no-comments.php:1295
+#: no-comments.php:1279
 msgid "Los formularios de comentarios y pings están cerrados."
 msgstr ""
 
-#: no-comments.php:1299
+#: no-comments.php:1283
 msgid "NO Comments está desactivado"
 msgstr ""
 
-#: no-comments.php:1302
+#: no-comments.php:1286
 msgid "Actívalo si quieres bloquear comentarios en todo el sitio."
 msgstr ""
 
-#: no-comments.php:1303
+#: no-comments.php:1287
 msgid "Ir a ajustes"
 msgstr ""
 
-#: no-comments.php:1315
+#: no-comments.php:1303
 msgid "NO Comments: ON"
 msgstr ""
 
-#: no-comments.php:1315
+#: no-comments.php:1303
 msgid "NO Comments: OFF"
 msgstr ""
 
-#: no-comments.php:1360
+#: no-comments.php:1348
+msgid "GitHub"
+msgstr ""
+
+#: no-comments.php:1349
 msgid "Instagram"
 msgstr ""
 
-#: no-comments.php:1469
-#: no-comments.php:1543
+#: no-comments.php:1457
+#: no-comments.php:1531
 msgid "Los ajustes del sitio están controlados por la red."
 msgstr ""
 
-#: no-comments.php:1474
-#: no-comments.php:1540
+#: no-comments.php:1462
+#: no-comments.php:1528
 msgid "Permisos insuficientes para ajustes de red."
 msgstr ""
 
-#: no-comments.php:1537
+#: no-comments.php:1525
 msgid "Este sitio no es una red multisite."
 msgstr ""
 
-#: no-comments.php:1547
+#: no-comments.php:1535
 msgid "El payload de ajustes debe ser un objeto JSON."
 msgstr ""
 
-#: no-comments.php:1587
-#: no-comments.php:1601
+#: no-comments.php:1575
+#: no-comments.php:1589
 msgid "NO Comments (Network)"
 msgstr ""
 
-#: no-comments.php:1603
+#: no-comments.php:1591
 msgid "Ajustes de red guardados."
 msgstr ""
 
-#: no-comments.php:1612
+#: no-comments.php:1600
 msgid "Forzar desde la Red"
 msgstr ""
 
-#: no-comments.php:1614
+#: no-comments.php:1602
 msgid "Aplicar estos ajustes a todos los sitios"
 msgstr ""
 
-#: no-comments.php:1615
+#: no-comments.php:1603
 msgid "Cuando está activo, los sitios no podrán cambiar estos valores."
 msgstr ""
 
-#: no-comments.php:1618
+#: no-comments.php:1606
 msgid "Estado global"
 msgstr ""
 
-#: no-comments.php:1620
+#: no-comments.php:1608
 msgid "Cerrar comentarios y pings en todo el network"
 msgstr ""
 
-#: no-comments.php:1625
+#: no-comments.php:1613
 msgid "Deshabilitar endpoint REST de comentarios"
 msgstr ""
 
-#: no-comments.php:1627
+#: no-comments.php:1615
 msgid "Deshabilitar XML‑RPC (wp.newComment)"
 msgstr ""
 
-#: no-comments.php:1636
+#: no-comments.php:1624
 msgid "Guardar ajustes de red"
 msgstr ""
