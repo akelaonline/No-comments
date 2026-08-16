@@ -1,15 +1,21 @@
 {
-  "name": "akela/no-comments",
-  "description": "NO Comments – Deshabilitar y borrar comentarios de forma segura (WordPress)",
+  "name": "akelaonline/no-comments",
+  "description": "NO Comments — disable comments and safely clean them up in WordPress.",
   "type": "project",
   "license": "GPL-2.0-or-later",
-  "require": {},
+  "authors": [
+    {
+      "name": "Alejandro D. José",
+      "homepage": "https://github.com/akelaonline"
+    }
+  ],
+  "require": {
+    "php": ">=7.4"
+  },
   "require-dev": {
-    "php": ">=7.4",
-    "squizlabs/php_codesniffer": "^3.9",
-    "wp-coding-standards/wpcs": "^2.3",
-    "dealerdirect/phpcodesniffer-composer-installer": "^1.0",
-    "phpunit/phpunit": "^9.6"
+    "dealerdirect/phpcodesniffer-composer-installer": "^1.1",
+    "squizlabs/php_codesniffer": "^3.13.5",
+    "wp-coding-standards/wpcs": "^3.4.1"
   },
   "scripts": {
     "lint": "phpcs -q",
@@ -19,6 +25,11 @@
   "config": {
     "allow-plugins": {
       "dealerdirect/phpcodesniffer-composer-installer": true
-    }
+    },
+    "sort-packages": true
+  },
+  "support": {
+    "issues": "https://github.com/akelaonline/No-comments/issues",
+    "source": "https://github.com/akelaonline/No-comments"
   }
 }
