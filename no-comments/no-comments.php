@@ -1,12 +1,16 @@
 <?php
 /**
  * Plugin Name: NO Comments
- * Description: Toggle simple para deshabilitar comentarios y pings en todo el sitio, con herramientas para borrar comentarios (spam/pendientes/papelera/todos).
- * Version: 1.10.1
- * Author: MKT Marketing Digital
- * Plugin URI: https://mktmarketingdigital.com/
- * Author URI: https://mktmarketingdigital.com/
+ * Description: Disable comments and pings site-wide, preserve WooCommerce reviews, and safely clean up comments with dry runs.
+ * Version: 1.11.0
+ * Requires at least: 5.9
+ * Requires PHP: 7.4
+ * Author: Alejandro D. José
+ * Plugin URI: https://github.com/akelaonline/No-comments
+ * Author URI: https://github.com/akelaonline
  * License: GPLv2 or later
+ * License URI: https://www.gnu.org/licenses/gpl-2.0.html
+ * Update URI: https://github.com/akelaonline/No-comments
  * Text Domain: no-comments
  * Domain Path: /languages
  */
@@ -202,16 +206,15 @@ final class No_Comments_Plugin {
 
     /** Render de compatibilidad */
     public static function render_compat_field() {
-        $keep_reviews = (bool) get_option( self::OPTION_WOO, 0 );
-        $disabled     = ! class_exists( 'WooCommerce' );
-        $attr_dis     = $disabled ? ' disabled="disabled"' : '';
+        $keep_reviews  = (bool) get_option( self::OPTION_WOO, 0 );
+        $woo_is_active = class_exists( 'WooCommerce' );
         echo '<p>' . esc_html__( 'Opciones de compatibilidad con plugins de terceros.', 'no-comments' ) . '</p>';
         echo '<label style="display:block;margin:4px 0;">';
         echo '<input type="hidden" name="' . esc_attr( self::OPTION_WOO ) . '" value="0" />';
-        echo '<input type="checkbox" name="' . esc_attr( self::OPTION_WOO ) . '" value="1" ' . checked( $keep_reviews, true, false ) . $attr_dis . ' /> ' . esc_html__( 'Mantener reseñas de productos (WooCommerce)', 'no-comments' );
+        echo '<input type="checkbox" name="' . esc_attr( self::OPTION_WOO ) . '" value="1" ' . checked( $keep_reviews, true, false ) . ' /> ' . esc_html__( 'Mantener reseñas de productos (WooCommerce)', 'no-comments' );
         echo '</label>';
-        if ( $disabled ) {
-            echo '<p class="description">' . esc_html__( 'WooCommerce no está activo en este sitio. Este ajuste tendrá efecto cuando esté activo.', 'no-comments' ) . '</p>';
+        if ( ! $woo_is_active ) {
+            echo '<p class="description">' . esc_html__( 'WooCommerce no está activo. Puedes dejar esta opción preparada y tendrá efecto cuando WooCommerce se active.', 'no-comments' ) . '</p>';
         }
     }
 
@@ -269,20 +272,24 @@ final class No_Comments_Plugin {
             $status_text  = $enabled ? __( 'Comentarios deshabilitados globalmente', 'no-comments' ) : __( 'Comentarios habilitados (comportamiento por defecto)', 'no-comments' );
             echo '<div style="margin:12px 0;padding:8px 12px;border-left:4px solid ' . esc_attr( $status_color ) . ';background:#fff;">' . esc_html( $status_text ) . '</div>';
 
-            // Aviso si los ajustes están forzados por la red
+            // Aviso si los ajustes están forzados por la red.
+            $network_enforced = false;
             if ( is_multisite() ) {
-                $net = self::get_network_settings();
-                if ( ! empty( $net['enforce'] ) ) {
+                $net              = self::get_network_settings();
+                $network_enforced = ! empty( $net['enforce'] );
+                if ( $network_enforced ) {
                     $net_url = esc_url( network_admin_url( 'settings.php?page=' . self::PAGE_SLUG . '-network' ) );
                     echo '<div class="notice notice-info" style="margin:12px 0 0 0;"><p>' . wp_kses_post( sprintf( __( 'Estos ajustes están controlados por la red. Gestiona los valores desde <a href="%s">NO Comments (Network)</a>.', 'no-comments' ), $net_url ) ) . '</p></div>';
                 }
             }
 
-            echo '<form action="options.php" method="post">';
-            settings_fields( self::SETTINGS_GROUP );
-            do_settings_sections( self::PAGE_SLUG );
-            submit_button();
-            echo '</form>';
+            if ( ! $network_enforced ) {
+                echo '<form action="options.php" method="post">';
+                settings_fields( self::SETTINGS_GROUP );
+                do_settings_sections( self::PAGE_SLUG );
+                submit_button();
+                echo '</form>';
+            }
         }
         // Branding footer
         echo '<hr style="margin-top:24px;opacity:.25;" />';
@@ -380,8 +387,8 @@ final class No_Comments_Plugin {
             } );
         }
 
-        // Rechazar a bajo nivel
-        add_filter( 'preprocess_comment', [ __CLASS__, 'filter_preprocess_comment' ] );
+        // Rechazar nuevas inserciones con un hook que admite WP_Error.
+        add_filter( 'pre_comment_approved', [ __CLASS__, 'filter_pre_comment_approved' ], 10, 2 );
     }
 
     /** Determina si se deben mantener reseñas de WooCommerce */
@@ -400,7 +407,7 @@ final class No_Comments_Plugin {
         if ( self::keep_woo_reviews() ) {
             $post = get_post( $post_id );
             if ( $post && 'product' === $post->post_type ) {
-                return true; // permitir reviews en productos
+                return $open; // Respetar si las reviews del producto están abiertas o cerradas.
             }
         }
         return false;
@@ -420,15 +427,15 @@ final class No_Comments_Plugin {
         return [];
     }
 
-    /** Filtro: bloquear creación salvo productos */
-    public static function filter_preprocess_comment( $commentdata ) {
+    /** Filtro: bloquear creación salvo productos. */
+    public static function filter_pre_comment_approved( $approved, $commentdata ) {
         if ( ! self::is_enabled() ) {
-            return $commentdata;
+            return $approved;
         }
         if ( self::keep_woo_reviews() && ! empty( $commentdata['comment_post_ID'] ) ) {
             $post = get_post( (int) $commentdata['comment_post_ID'] );
             if ( $post && 'product' === $post->post_type ) {
-                return $commentdata; // permitir review
+                return $approved; // Respetar el flujo normal de reviews.
             }
         }
         return new WP_Error( 'no_comments_disabled', __( 'Los comentarios están cerrados en todo el sitio.', 'no-comments' ), [ 'status' => 403 ] );
@@ -503,7 +510,11 @@ final class No_Comments_Plugin {
                     var conf=form.querySelector("input[name=confirm]");
                     if(!conf || conf.value!=="DELETE"){ e.preventDefault(); alert("Debes escribir DELETE para confirmar."); conf&&conf.focus(); return false; }
                     var scope=form.querySelector("input[name=delete_scope]:checked");
-                    var msg="¿Seguro que deseas ejecutar la limpieza ("+(scope?scope.value:"?")+")? Esta acción no se puede deshacer.";
+                    var strategy=form.querySelector("input[name=delete_strategy]:checked");
+                    var reversible=strategy && strategy.value==="trash" && (!scope || scope.value!=="trash");
+                    var msg=reversible
+                        ? "¿Mover los comentarios seleccionados a la Papelera? Podrás restaurarlos después."
+                        : "¿Seguro que deseas ejecutar la limpieza ("+(scope?scope.value:"?")+")? Esta acción no se puede deshacer.";
                     if(!window.confirm(msg)){ e.preventDefault(); return false; }
                     var submitBtn=form.querySelector("button[type=\"submit\"], input[type=\"submit\"]");
                     if(submitBtn){ submitBtn.setAttribute("disabled","disabled"); submitBtn.classList.add("is-busy"); if(submitBtn.tagName==="BUTTON"){ submitBtn.textContent="Ejecutando..."; } }
@@ -761,6 +772,12 @@ final class No_Comments_Plugin {
             wp_die( esc_html__( 'Permisos insuficientes.', 'no-comments' ) );
         }
         check_admin_referer( 'no_comments_toggle_action', '_wpnonce_no_comments_toggle' );
+
+        if ( is_multisite() && class_exists( '\\NoComments\\Infrastructure\\OptionsRepository' ) && \NoComments\Infrastructure\OptionsRepository::is_enforced() ) {
+            wp_safe_redirect( add_query_arg( [ 'page' => self::PAGE_SLUG ], admin_url( 'options-general.php' ) ) );
+            exit;
+        }
+
         $current = self::is_enabled();
         update_option( self::OPTION_KEY, $current ? 0 : 1 );
         wp_safe_redirect( wp_get_referer() ? wp_get_referer() : admin_url() );
@@ -861,6 +878,10 @@ final class No_Comments_Plugin {
         $xmlrpc  = $request->get_param( 'xmlrpc' );
         $woo     = $request->get_param( 'woo' );
         $enforce = $request->get_param( 'enforce' );
+
+        if ( 'site' === $level && is_multisite() && class_exists( '\\NoComments\\Infrastructure\\OptionsRepository' ) && \NoComments\Infrastructure\OptionsRepository::is_enforced() ) {
+            return new \WP_Error( 'no_comments_network_enforced', __( 'Los ajustes del sitio están controlados por la red.', 'no-comments' ), [ 'status' => 409 ] );
+        }
 
         if ( 'network' === $level && is_multisite() ) {
             if ( ! current_user_can( 'manage_network_options' ) ) {
