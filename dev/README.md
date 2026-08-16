@@ -1,66 +1,82 @@
-# Entorno de desarrollo para "NO Comments" (WordPress)
+# NO Comments — local development
 
-Este entorno usa Docker Compose con WordPress, MariaDB, phpMyAdmin y WP-CLI. El plugin `no-comments/` se monta automáticamente dentro de `wp-content/plugins/no-comments`.
+Docker Compose environment for developing and manually testing the plugin against the current stable WordPress stack.
 
-## Requisitos
+## Stack
 
-- Docker Desktop (Compose v2)
+- WordPress 7.0.2
+- PHP 8.3
+- MariaDB 11.4
+- WP-CLI
+- phpMyAdmin
 
-## Puertos
+Both web ports bind to `127.0.0.1` by default, so this environment is intended for local development only.
 
-- WordPress: http://localhost:8080
-- phpMyAdmin: http://localhost:8081
+## Requirements
 
-Puedes ajustar los puertos en `dev/.env`.
+- Docker Desktop or another Docker Engine with Compose v2
 
-## Uso rápido
+## Quick start
 
-1. Configura variables en `dev/.env` si lo deseas (usuario/clave admin, puertos, etc.).
-2. Levanta los servicios:
+From `dev/`:
 
 ```bash
+cp .env.example .env
 docker compose up -d
 ```
 
-3. Espera a que el servicio `wpcli` termine la configuración. Revisa los logs:
+The `wpcli` service waits for WordPress and the database, installs WordPress when needed, activates `no-comments`, enables the global comment block, and configures pretty permalinks.
+
+Check setup progress:
 
 ```bash
 docker compose logs wpcli
 ```
 
-4. Accede a WordPress: http://localhost:8080
-   - Usuario y clave del admin según `.env` (por defecto: `admin` / `admin123`).
+Default local endpoints:
 
-5. Verifica que el plugin "NO Comments" esté activo y que el toggle funcione en `Ajustes → NO Comments`.
+- WordPress: `http://localhost:8080`
+- phpMyAdmin: `http://localhost:8081`
 
-## Comandos útiles
+Change ports and local development credentials in `.env` before starting the stack.
 
-- Estado de servicios:
+## Useful commands
 
 ```bash
+# Service status
 docker compose ps
-```
 
-- Logs:
-
-```bash
+# WordPress logs
 docker compose logs -f wordpress
-```
 
-- Ejecutar WP-CLI manualmente:
+# Plugin status through WP-CLI
+docker compose run --rm wpcli wp no-comments status
 
-```bash
+# WordPress plugin list
 docker compose run --rm wpcli wp plugin list
-```
 
-- Apagar los servicios:
-
-```bash
+# Stop services
 docker compose down
+
+# Stop and remove local volumes
+docker compose down -v
 ```
 
-## Notas
+## Manual smoke test
 
-- La base de datos y los archivos de WordPress se guardan en volúmenes Docker (`db_data`, `wp_data`).
-- `wp-setup.sh` instalará WordPress, activará el plugin `no-comments` y dejará activada la opción global para deshabilitar comentarios.
-- Cambia credenciales y correos del admin en `dev/.env` antes de exponer el entorno.
+After startup, verify at least these flows:
+
+1. Open **Settings → NO Comments** and enable/disable the global block.
+2. Confirm normal post comments close when the plugin is enabled.
+3. If WooCommerce is installed, enable **Keep product reviews** and verify product review state is preserved.
+4. In **Delete Comments**, run a dry-run first.
+5. Verify **All + Move to Trash** leaves comments in Trash and does not permanently delete them.
+6. Verify **Empty Trash** permanently deletes trashed comments.
+7. Exercise the REST settings endpoint with an authenticated administrator.
+8. On Multisite, verify network enforcement prevents site-level changes.
+
+## Notes
+
+- `../no-comments` is bind-mounted directly into the WordPress plugins directory, so PHP changes are immediately visible.
+- Database and WordPress files live in Docker volumes (`db_data`, `wp_data`).
+- The sample credentials are intentionally development-only. Do not expose this stack to the public internet.
