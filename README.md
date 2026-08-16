@@ -3,7 +3,7 @@
 **Disable WordPress comments completely — without breaking WooCommerce reviews when you still need them.**
 
 [![Quality](https://github.com/akelaonline/No-comments/actions/workflows/ci.yml/badge.svg)](https://github.com/akelaonline/No-comments/actions/workflows/ci.yml)
-![Version](https://img.shields.io/badge/version-1.12.0-111827)
+![Version](https://img.shields.io/badge/version-1.13.0-111827)
 ![WordPress](https://img.shields.io/badge/WordPress-6.0%2B-21759b)
 ![PHP](https://img.shields.io/badge/PHP-7.4%E2%80%938.5-777bb4)
 ![License](https://img.shields.io/badge/license-GPL--2.0--or--later-16a34a)
@@ -19,14 +19,17 @@ Turning off “Allow people to submit comments” in WordPress is not always the
 NO Comments gives that job one dedicated place:
 
 - close comments and pings globally;
+- keep comments open on selected post types (exceptions, incl. WooCommerce reviews);
+- auto-close comments on content older than N days without disabling the site;
+- auto-delete spam on a schedule (WP-Cron, daily/twice-daily/weekly);
 - hide comment-management UI when it is no longer useful;
 - optionally remove comment REST endpoints and XML-RPC comment creation;
-- preserve WooCommerce product reviews when required;
 - safely clean old comments with dry-runs and scoped deletion;
 - enforce one policy across WordPress Multisite;
 - automate administration through WP-CLI or authenticated REST requests;
 - export/import settings as JSON to back up or clone configuration;
-- short-circuit comment queries and comment feeds when the shutdown is active.
+- short-circuit comment queries and comment feeds when the shutdown is active;
+- purge page cache for affected posts after bulk deletion (Tucho-ready).
 
 ## Features
 
@@ -39,6 +42,22 @@ NO Comments gives that job one dedicated place:
 - Redirects direct access to comment/discussion screens.
 - Exposes the current state through WordPress Site Health.
 - **Zero-cost frontend:** while the shutdown is active, comment queries are short-circuited through `comments_pre_query` (no database queries) and comment feeds are disabled (discovery link removed, direct access redirected home).
+
+### Post-type exceptions
+
+Keep comments (and pings) on selected post types while the global shutdown is active. The Comments menu, queries and submission flow keep working for those types. WooCommerce `product` is automatically an exception when **Keep product reviews** is enabled, and everything honors each product's own review state.
+
+### Auto-close by age
+
+Set a number of days and NO Comments closes forms/pings on content older than that — useful for sites that still want comments on recent posts but not on old ones. Applies when the global shutdown is off (0 = disabled). Existing comments stay visible; only new submissions are blocked.
+
+### Scheduled spam cleanup
+
+Enable **Auto cleanup** and NO Comments deletes spam on a WP-Cron schedule (daily, twice-daily or weekly). Every run is recorded (timestamp + count), runs are guarded against concurrency, and you can trigger or inspect it from WP-CLI (`wp no-comments cleanup status|run`).
+
+### Cache purge after bulk deletion
+
+After a real bulk delete, the affected post IDs are published through the `no_comments_after_delete` action, and Tucho page cache is purged per post when Tucho is active (`tucho_purge_post`).
 
 ### API hardening
 
@@ -144,6 +163,21 @@ wp no-comments woo-reviews status
 # Export / import settings
 wp no-comments settings export --file=no-comments.json
 wp no-comments settings import no-comments.json
+
+# Post-type exceptions
+wp no-comments exceptions list
+wp no-comments exceptions add page
+wp no-comments exceptions remove page
+
+# Auto-close by age (days)
+wp no-comments auto-close 30
+wp no-comments auto-close status
+
+# Scheduled spam cleanup
+wp no-comments cleanup status
+wp no-comments cleanup enable --interval=weekly
+wp no-comments cleanup run
+wp no-comments cleanup disable
 ```
 
 ## REST API
@@ -167,7 +201,11 @@ Settings payload fields:
   "rest": true,
   "xmlrpc": true,
   "woo": false,
-  "enforce": false
+  "enforce": false,
+  "exceptions": ["page"],
+  "auto_close_days": 30,
+  "auto_cleanup": true,
+  "auto_cleanup_interval": "weekly"
 }
 ```
 

@@ -12,6 +12,11 @@ $option_keys = array(
 	'no_comments_disable_rest',
 	'no_comments_disable_xmlrpc',
 	'no_comments_keep_woo_reviews',
+	'no_comments_exceptions',
+	'no_comments_auto_close_days',
+	'no_comments_auto_cleanup',
+	'no_comments_auto_cleanup_interval',
+	'no_comments_last_cleanup',
 );
 
 if ( is_multisite() ) {
@@ -28,6 +33,8 @@ if ( is_multisite() ) {
 		foreach ( $option_keys as $key ) {
 			delete_option( $key );
 		}
+		wp_clear_scheduled_hook( 'no_comments_auto_cleanup' );
+		delete_transient( 'no_comments_cleanup_lock' );
 		restore_current_blog();
 	}
 
@@ -36,4 +43,6 @@ if ( is_multisite() ) {
 	foreach ( $option_keys as $key ) {
 		delete_option( $key );
 	}
+	wp_clear_scheduled_hook( 'no_comments_auto_cleanup' );
+	delete_transient( 'no_comments_cleanup_lock' );
 }

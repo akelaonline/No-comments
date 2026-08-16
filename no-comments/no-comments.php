@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: NO Comments
- * Description: Cierra comentarios y pings en todo el sitio y limpia comentarios de forma segura, con WooCommerce, Multisite, REST y WP-CLI.
- * Version: 1.12.0
+ * Description: Cierra comentarios y pings en todo el sitio y limpia comentarios de forma segura, con WooCommerce, Multisite, REST, WP-CLI y limpieza automática.
+ * Version: 1.13.0
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * Author: Akela (@akelaonline)
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit; // Salir si se accede directamente.
 }
 
-define( 'NO_COMMENTS_VERSION', '1.12.0' );
+define( 'NO_COMMENTS_VERSION', '1.13.0' );
 define( 'NO_COMMENTS_FILE', __FILE__ );
 define( 'NO_COMMENTS_PATH', plugin_dir_path( __FILE__ ) );
 define( 'NO_COMMENTS_URL', plugin_dir_url( __FILE__ ) );
@@ -42,6 +42,15 @@ final class No_Comments_Plugin {
     const OPTION_XMLRPC  = 'no_comments_disable_xmlrpc';
     const OPTION_WOO     = 'no_comments_keep_woo_reviews';
     const OPTION_NETWORK = 'no_comments_network_settings';
+
+    // Opciones v1.13.0
+    const OPTION_EXCEPTIONS       = 'no_comments_exceptions';
+    const OPTION_AUTO_CLOSE_DAYS  = 'no_comments_auto_close_days';
+    const OPTION_AUTO_CLEANUP     = 'no_comments_auto_cleanup';
+    const OPTION_AUTO_CLEANUP_INT = 'no_comments_auto_cleanup_interval';
+    const OPTION_LAST_CLEANUP     = 'no_comments_last_cleanup';
+    const CRON_EVENT              = 'no_comments_auto_cleanup';
+    const CRON_LOCK               = 'no_comments_cleanup_lock';
 
     /**
      * Inicio del plugin.
@@ -90,10 +99,94 @@ final class No_Comments_Plugin {
         // Enlaces extra en la fila del plugin (branding)
         add_filter( 'plugin_row_meta', [ __CLASS__, 'plugin_row_meta' ], 10, 2 );
 
-        // Aplicar bloqueo de comentarios si está activado
+        // Filtros compartidos: se registran siempre y cada método decide según
+        // el estado efectivo (bloqueo global y/o cierre por antigüedad).
+        add_filter( 'comments_open', [ __CLASS__, 'filter_comments_open' ], 20, 2 );
+        add_filter( 'pings_open', [ __CLASS__, 'filter_pings_open' ], 20, 2 );
+        add_filter( 'comments_array', [ __CLASS__, 'filter_comments_array' ], 10, 2 );
+        add_filter( 'comments_pre_query', [ __CLASS__, 'filter_comments_pre_query' ], 10, 2 );
+        add_filter( 'pre_comment_approved', [ __CLASS__, 'filter_pre_comment_approved' ], 10, 2 );
+
+        // Limpieza automática por WP-Cron (intervalo semanal propio).
+        add_filter( 'cron_schedules', [ __CLASS__, 'register_cron_schedules' ] );
+        add_action( self::CRON_EVENT, [ __CLASS__, 'run_cleanup' ] );
+        self::maybe_schedule_cleanup();
+
+        // Hardening completo cuando el bloqueo global está activo.
         if ( self::is_enabled() ) {
             self::apply_disable_comments();
         }
+    }
+
+    /** Registra el intervalo semanal para WP-Cron. */
+    public static function register_cron_schedules( $schedules ) {
+        if ( ! isset( $schedules['weekly'] ) ) {
+            $schedules['weekly'] = [
+                'interval' => WEEK_IN_SECONDS,
+                'display'  => __( 'Semanal', 'no-comments' ),
+            ];
+        }
+        return $schedules;
+    }
+
+    /** Limpieza automática activa. */
+    public static function auto_cleanup_enabled() {
+        return (bool) get_option( self::OPTION_AUTO_CLEANUP, 0 );
+    }
+
+    /** Intervalo de limpieza automática (daily|twicedaily|weekly). */
+    public static function auto_cleanup_interval() {
+        $interval = get_option( self::OPTION_AUTO_CLEANUP_INT, 'daily' );
+        return in_array( $interval, [ 'daily', 'twicedaily', 'weekly' ], true ) ? $interval : 'daily';
+    }
+
+    /**
+     * Mantiene el evento de WP-Cron alineado con la configuración
+     * (agenda/desagenda y resuelve cambios de intervalo).
+     */
+    public static function maybe_schedule_cleanup() {
+        $event    = self::CRON_EVENT;
+        $next     = wp_next_scheduled( $event );
+        $enabled  = self::auto_cleanup_enabled();
+        $interval = self::auto_cleanup_interval();
+
+        if ( ! $enabled ) {
+            if ( $next ) {
+                wp_unschedule_event( $next, $event );
+            }
+            return;
+        }
+
+        $scheduled_interval = $next ? (string) wp_get_schedule( $event ) : '';
+        if ( ! $next || $scheduled_interval !== $interval ) {
+            if ( $next ) {
+                wp_unschedule_event( $next, $event );
+            }
+            wp_schedule_event( time() + MINUTE_IN_SECONDS, $interval, $event );
+        }
+    }
+
+    /**
+     * Ejecuta la limpieza automática de spam. Protegida con lock para evitar
+     * ejecuciones concurrentes (cron + CLI).
+     *
+     * @return int Comentarios eliminados (0 si otra ejecución estaba activa).
+     */
+    public static function run_cleanup() {
+        if ( get_transient( self::CRON_LOCK ) ) {
+            return 0;
+        }
+        set_transient( self::CRON_LOCK, 1, 10 * MINUTE_IN_SECONDS );
+
+        $deleted = self::delete_comments( 'spam', [], 'delete' );
+
+        update_option( self::OPTION_LAST_CLEANUP, [
+            'time'    => gmdate( 'c' ),
+            'deleted' => $deleted,
+        ] );
+        delete_transient( self::CRON_LOCK );
+
+        return $deleted;
     }
 
     /** Carga de i18n */
@@ -185,6 +278,79 @@ final class No_Comments_Plugin {
             self::PAGE_SLUG,
             'no_comments_main'
         );
+
+        // Excepciones por tipo de contenido (v1.13.0)
+        register_setting(
+            self::SETTINGS_GROUP,
+            self::OPTION_EXCEPTIONS,
+            [
+                'type'              => 'array',
+                'sanitize_callback' => function ( $value ) {
+                    if ( ! is_array( $value ) ) {
+                        return [];
+                    }
+                    return array_values( array_unique( array_filter( array_map( 'sanitize_key', $value ) ) ) );
+                },
+                'default'           => [],
+            ]
+        );
+
+        add_settings_field(
+            self::OPTION_EXCEPTIONS,
+            __( 'Excepciones', 'no-comments' ),
+            [ __CLASS__, 'render_exceptions_field' ],
+            self::PAGE_SLUG,
+            'no_comments_main'
+        );
+
+        // Cierre automático por antigüedad (v1.13.0)
+        register_setting(
+            self::SETTINGS_GROUP,
+            self::OPTION_AUTO_CLOSE_DAYS,
+            [
+                'type'              => 'integer',
+                'sanitize_callback' => function ( $value ) { return max( 0, (int) $value ); },
+                'default'           => 0,
+            ]
+        );
+
+        add_settings_field(
+            self::OPTION_AUTO_CLOSE_DAYS,
+            __( 'Cierre automático', 'no-comments' ),
+            [ __CLASS__, 'render_auto_close_field' ],
+            self::PAGE_SLUG,
+            'no_comments_main'
+        );
+
+        // Limpieza automática por WP-Cron (v1.13.0)
+        register_setting(
+            self::SETTINGS_GROUP,
+            self::OPTION_AUTO_CLEANUP,
+            [
+                'type'              => 'boolean',
+                'sanitize_callback' => function ( $value ) { return $value ? 1 : 0; },
+                'default'           => 0,
+            ]
+        );
+        register_setting(
+            self::SETTINGS_GROUP,
+            self::OPTION_AUTO_CLEANUP_INT,
+            [
+                'type'              => 'string',
+                'sanitize_callback' => function ( $value ) {
+                    return in_array( $value, [ 'daily', 'twicedaily', 'weekly' ], true ) ? $value : 'daily';
+                },
+                'default'           => 'daily',
+            ]
+        );
+
+        add_settings_field(
+            self::OPTION_AUTO_CLEANUP,
+            __( 'Limpieza automática', 'no-comments' ),
+            [ __CLASS__, 'render_cleanup_field' ],
+            self::PAGE_SLUG,
+            'no_comments_main'
+        );
     }
 
     /** Render del checkbox */
@@ -224,6 +390,70 @@ final class No_Comments_Plugin {
         echo '</label>';
         if ( ! $woo_is_active ) {
             echo '<p class="description">' . esc_html__( 'WooCommerce no está activo. Puedes dejar esta opción preparada y tendrá efecto cuando WooCommerce se active.', 'no-comments' ) . '</p>';
+        }
+    }
+
+    /** Render: excepciones por tipo de contenido */
+    public static function render_exceptions_field() {
+        $current = get_option( self::OPTION_EXCEPTIONS, [] );
+        if ( ! is_array( $current ) ) {
+            $current = [];
+        }
+        $types = get_post_types( [ 'public' => true ], 'objects' );
+        if ( empty( $types ) ) {
+            echo '<p class="description">' . esc_html__( 'No hay tipos de contenido públicos registrados.', 'no-comments' ) . '</p>';
+            return;
+        }
+        echo '<p>' . esc_html__( 'Estos tipos de contenido conservan comentarios y pings aunque el bloqueo global esté activo:', 'no-comments' ) . '</p>';
+        echo '<input type="hidden" name="' . esc_attr( self::OPTION_EXCEPTIONS ) . '[]" value="" />';
+        foreach ( $types as $slug => $obj ) {
+            $label = isset( $obj->labels->singular_name ) ? $obj->labels->singular_name : $slug;
+            $checked = checked( in_array( $slug, $current, true ), true, false );
+            echo '<label style="display:inline-block;margin:2px 12px 2px 0;">';
+            // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- checked() returns a safe HTML attribute.
+            echo '<input type="checkbox" name="' . esc_attr( self::OPTION_EXCEPTIONS ) . '[]" value="' . esc_attr( $slug ) . '" ' . $checked . ' /> ' . esc_html( $label );
+            echo '</label>';
+        }
+        if ( self::keep_woo_reviews() ) {
+            echo '<p class="description">' . esc_html__( 'WooCommerce está activo con reseñas: "product" se mantiene como excepción automáticamente.', 'no-comments' ) . '</p>';
+        }
+    }
+
+    /** Render: cierre automático por antigüedad */
+    public static function render_auto_close_field() {
+        $days = self::auto_close_days();
+        echo '<label>';
+        echo '<input type="number" name="' . esc_attr( self::OPTION_AUTO_CLOSE_DAYS ) . '" value="' . esc_attr( (string) $days ) . '" min="0" step="1" style="width:100px;" /> ';
+        echo esc_html__( 'días', 'no-comments' );
+        echo '</label>';
+        echo '<p class="description">' . esc_html__( 'Cierra formularios y pings en contenido con más de N días de antigüedad, sin desactivar el bloqueo del sitio. Aplica cuando el bloqueo global está apagado. 0 = desactivado.', 'no-comments' ) . '</p>';
+    }
+
+    /** Render: limpieza automática de spam */
+    public static function render_cleanup_field() {
+        $enabled  = self::auto_cleanup_enabled();
+        $interval = self::auto_cleanup_interval();
+        echo '<label style="display:block;margin:4px 0;">';
+        echo '<input type="hidden" name="' . esc_attr( self::OPTION_AUTO_CLEANUP ) . '" value="0" />';
+        echo '<input type="checkbox" name="' . esc_attr( self::OPTION_AUTO_CLEANUP ) . '" value="1" ' . checked( $enabled, true, false ) . ' /> ';
+        echo esc_html__( 'Borrar spam automáticamente (WP-Cron)', 'no-comments' );
+        echo '</label>';
+        echo '<label style="display:block;margin:4px 0;">' . esc_html__( 'Frecuencia:', 'no-comments' ) . ' ';
+        echo '<select name="' . esc_attr( self::OPTION_AUTO_CLEANUP_INT ) . '">';
+        foreach ( [ 'daily' => __( 'Diaria', 'no-comments' ), 'twicedaily' => __( 'Dos veces al día', 'no-comments' ), 'weekly' => __( 'Semanal', 'no-comments' ) ] as $value => $label ) {
+            echo '<option value="' . esc_attr( $value ) . '" ' . selected( $interval, $value, false ) . '>' . esc_html( $label ) . '</option>';
+        }
+        echo '</select></label>';
+        $last = get_option( self::OPTION_LAST_CLEANUP, [] );
+        if ( is_array( $last ) && ! empty( $last['time'] ) ) {
+            echo '<p class="description">' . sprintf(
+                /* translators: 1: date of the last cleanup, 2: number of deleted comments. */
+                esc_html__( 'Última limpieza: %1$s — %2$d comentarios eliminados.', 'no-comments' ),
+                esc_html( (string) $last['time'] ),
+                (int) $last['deleted']
+            ) . '</p>';
+        } else {
+            echo '<p class="description">' . esc_html__( 'El borrado usa alcance Spam y borrado definitivo. Se registra la fecha y cantidad de cada ejecución.', 'no-comments' ) . '</p>';
         }
     }
 
@@ -352,32 +582,20 @@ final class No_Comments_Plugin {
 
     /** Aplica el bloqueo de comentarios cuando está habilitado */
     private static function apply_disable_comments() {
-        // Cerrar formularios de comentarios y pings en frontend.
-        add_filter( 'comments_open', [ __CLASS__, 'filter_comments_open' ], 20, 2 );
-        add_filter( 'pings_open', '__return_false', 20 );
-
-        // Vaciar array de comentarios salvo excepciones.
-        add_filter( 'comments_array', [ __CLASS__, 'filter_comments_array' ], 10, 2 );
-
-        // Performance: cortar las consultas de comentarios en el frontend sin tocar la BD.
-        // Se preservan los conteos, los estados de moderación y las consultas por IDs
-        // (necesarias para el borrado masivo y la limpieza programada).
-        add_filter( 'comments_pre_query', [ __CLASS__, 'filter_comments_pre_query' ], 10, 2 );
-
         // Quitar feeds de comentarios: link de descubrimiento y acceso directo.
         add_filter( 'feed_links_show_comments_feed', '__return_false', 20 );
         add_action( 'template_redirect', [ __CLASS__, 'filter_comment_feed_redirect' ], 1 );
 
-        // Quitar soporte de comentarios y trackbacks de todos los post types públicos
+        // Quitar soporte de comentarios y trackbacks de los post types públicos
+        // que no estén en la lista de excepciones.
         add_action( 'init', function () {
+            $exceptions = self::exception_types();
             foreach ( get_post_types( [ 'public' => true ], 'names' ) as $post_type ) {
+                if ( in_array( $post_type, $exceptions, true ) ) {
+                    continue; // Mantener comentarios y trackbacks en los tipos de excepción.
+                }
                 if ( post_type_supports( $post_type, 'comments' ) ) {
-                    // Mantener comentarios en productos si así se configuró.
-                    if ( 'product' === $post_type && self::keep_woo_reviews() ) {
-                        // No quitar soporte.
-                    } else {
-                        remove_post_type_support( $post_type, 'comments' );
-                    }
+                    remove_post_type_support( $post_type, 'comments' );
                 }
                 if ( post_type_supports( $post_type, 'trackbacks' ) ) {
                     remove_post_type_support( $post_type, 'trackbacks' );
@@ -385,38 +603,38 @@ final class No_Comments_Plugin {
             }
         }, 100 );
 
-        // Ocultar el menú de Comentarios y el submenú Discusión (solo si no mantenemos reseñas)
+        // Ocultar el menú de Comentarios y el submenú Discusión (solo si no hay excepciones activas).
         add_action( 'admin_menu', function () {
-            if ( ! self::keep_woo_reviews() ) {
+            if ( empty( self::exception_types() ) ) {
                 remove_menu_page( 'edit-comments.php' );
             }
             remove_submenu_page( 'options-general.php', 'options-discussion.php' );
         }, 999 );
 
-        // Quitar icono de comentarios del admin bar
+        // Quitar icono de comentarios del admin bar.
         add_action( 'admin_bar_menu', function ( $wp_admin_bar ) {
-            if ( ! self::keep_woo_reviews() ) {
+            if ( empty( self::exception_types() ) ) {
                 $wp_admin_bar->remove_node( 'comments' );
             }
         }, 999 );
 
-        // Bloquear accesos directos
+        // Bloquear accesos directos.
         add_action( 'admin_init', function () {
             if ( is_admin() && isset( $GLOBALS['pagenow'] ) && in_array( $GLOBALS['pagenow'], [ 'options-discussion.php' ], true ) ) {
                 wp_safe_redirect( admin_url() );
                 exit;
             }
-            // Restringir edit-comments.php solo si no mantenemos reseñas de Woo.
-            if ( is_admin() && ! self::keep_woo_reviews() && isset( $GLOBALS['pagenow'] ) && in_array( $GLOBALS['pagenow'], [ 'edit-comments.php' ], true ) ) {
+            // Restringir edit-comments.php solo si no hay excepciones activas.
+            if ( is_admin() && empty( self::exception_types() ) && isset( $GLOBALS['pagenow'] ) && in_array( $GLOBALS['pagenow'], [ 'edit-comments.php' ], true ) ) {
                 wp_safe_redirect( admin_url() );
                 exit;
             }
         }, 1 );
 
-        // Fallback visual por CSS (respetando Woo reviews si aplica, incluyendo multisite)
+        // Fallback visual por CSS (respeta excepciones, incluyendo multisite).
         add_action( 'admin_head', function () {
             $css = '#adminmenu a[href$="options-discussion.php"]{display:none !important;}';
-            if ( ! self::keep_woo_reviews() ) {
+            if ( empty( self::exception_types() ) ) {
                 $css .= '#menu-comments, #adminmenu a[href$="edit-comments.php"]{display:none !important;}';
             }
             // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- $css contains only plugin-defined selectors.
@@ -443,9 +661,6 @@ final class No_Comments_Plugin {
                 return $methods;
             } );
         }
-
-        // Rechazar nuevas inserciones con un hook que admite WP_Error.
-        add_filter( 'pre_comment_approved', [ __CLASS__, 'filter_pre_comment_approved' ], 10, 2 );
     }
 
     /** Determina si se deben mantener reseñas de WooCommerce */
@@ -457,30 +672,92 @@ final class No_Comments_Plugin {
     }
 
     /**
-     * Determina si un post es una excepción al cierre global (p. ej. reseñas
-     * de productos WooCommerce).
+     * Tipos de contenido que mantienen comentarios con el bloqueo global activo.
+     * Combina la lista configurable de excepciones con WooCommerce (product)
+     * cuando la compatibilidad de reseñas está activa.
+     *
+     * @return string[]
+     */
+    private static function exception_types() {
+        $types = get_option( self::OPTION_EXCEPTIONS, [] );
+        if ( ! is_array( $types ) ) {
+            $types = [];
+        }
+        $types = array_values( array_unique( array_filter( array_map( 'sanitize_key', $types ) ) ) );
+        if ( self::keep_woo_reviews() ) {
+            $types[] = 'product';
+            $types = array_values( array_unique( $types ) );
+        }
+        return $types;
+    }
+
+    /**
+     * Determina si un post es una excepción al cierre global
+     * (excepciones configuradas o reseñas de productos WooCommerce).
      *
      * @param int $post_id
      * @return bool
      */
     private static function is_exception_post( $post_id ) {
         $post_id = absint( $post_id );
-        if ( ! $post_id || ! self::keep_woo_reviews() ) {
+        if ( ! $post_id ) {
             return false;
         }
         $post = get_post( $post_id );
-        return $post && 'product' === $post->post_type;
+        return $post && in_array( $post->post_type, self::exception_types(), true );
     }
 
-    /** Filtro: comments_open con excepción para productos */
+    /** Días para el cierre automático de contenido antiguo (0 = desactivado). */
+    public static function auto_close_days() {
+        return max( 0, (int) get_option( self::OPTION_AUTO_CLOSE_DAYS, 0 ) );
+    }
+
+    /**
+     * Indica si un post superó la antigüedad configurada para cerrar comentarios.
+     *
+     * @param int $post_id
+     * @return bool
+     */
+    private static function post_is_too_old( $post_id ) {
+        $days = self::auto_close_days();
+        if ( $days <= 0 ) {
+            return false;
+        }
+        $post = get_post( $post_id );
+        if ( ! $post || empty( $post->post_date ) || '0000-00-00 00:00:00' === $post->post_date ) {
+            return false;
+        }
+        $time = strtotime( $post->post_date );
+        if ( false === $time ) {
+            return false;
+        }
+        return ( time() - $time ) > $days * DAY_IN_SECONDS;
+    }
+
+    /** Filtro: comments_open (bloqueo global y/o cierre por antigüedad) */
     public static function filter_comments_open( $open, $post_id ) {
-        if ( ! self::is_enabled() ) {
-            return $open;
+        $post_id = absint( $post_id );
+        if ( self::is_enabled() ) {
+            if ( self::is_exception_post( $post_id ) ) {
+                return $open; // Respetar el estado propio del post (p. ej. reviews).
+            }
+            return false;
         }
-        if ( self::is_exception_post( $post_id ) ) {
-            return $open; // Respetar si las reviews del producto están abiertas o cerradas.
+        if ( self::post_is_too_old( $post_id ) ) {
+            return false;
         }
-        return false;
+        return $open;
+    }
+
+    /** Filtro: pings_open (bloqueo global y/o cierre por antigüedad) */
+    public static function filter_pings_open( $open, $post_id ) {
+        if ( self::is_enabled() ) {
+            return false;
+        }
+        if ( self::post_is_too_old( $post_id ) ) {
+            return false;
+        }
+        return $open;
     }
 
     /** Filtro: comments_array con excepción para productos */
@@ -542,15 +819,22 @@ final class No_Comments_Plugin {
         exit;
     }
 
-    /** Filtro: bloquear creación salvo productos. */
+    /** Filtro: bloquear creación (bloqueo global y/o cierre por antigüedad). */
     public static function filter_pre_comment_approved( $approved, $commentdata ) {
-        if ( ! self::is_enabled() ) {
-            return $approved;
+        $post_id = isset( $commentdata['comment_post_ID'] ) ? absint( $commentdata['comment_post_ID'] ) : 0;
+
+        if ( self::is_enabled() ) {
+            if ( $post_id && self::is_exception_post( $post_id ) ) {
+                return $approved; // Respetar el flujo normal de reviews.
+            }
+            return new WP_Error( 'no_comments_disabled', __( 'Los comentarios están cerrados en todo el sitio.', 'no-comments' ), [ 'status' => 403 ] );
         }
-        if ( ! empty( $commentdata['comment_post_ID'] ) && self::is_exception_post( (int) $commentdata['comment_post_ID'] ) ) {
-            return $approved; // Respetar el flujo normal de reviews.
+
+        if ( $post_id && self::post_is_too_old( $post_id ) ) {
+            return new WP_Error( 'no_comments_auto_closed', __( 'Los comentarios están cerrados para contenido antiguo.', 'no-comments' ), [ 'status' => 403 ] );
         }
-        return new WP_Error( 'no_comments_disabled', __( 'Los comentarios están cerrados en todo el sitio.', 'no-comments' ), [ 'status' => 403 ] );
+
+        return $approved;
     }
 
     /**
@@ -843,10 +1127,14 @@ final class No_Comments_Plugin {
             'version'  => NO_COMMENTS_VERSION,
             'exported' => gmdate( 'c' ),
             'site'     => [
-                'enabled' => (bool) get_option( self::OPTION_KEY, 0 ),
-                'rest'    => (bool) get_option( self::OPTION_REST, 1 ),
-                'xmlrpc'  => (bool) get_option( self::OPTION_XMLRPC, 1 ),
-                'woo'     => (bool) get_option( self::OPTION_WOO, 0 ),
+                'enabled'               => (bool) get_option( self::OPTION_KEY, 0 ),
+                'rest'                  => (bool) get_option( self::OPTION_REST, 1 ),
+                'xmlrpc'                => (bool) get_option( self::OPTION_XMLRPC, 1 ),
+                'woo'                   => (bool) get_option( self::OPTION_WOO, 0 ),
+                'exceptions'            => self::exception_types(),
+                'auto_close_days'       => self::auto_close_days(),
+                'auto_cleanup'          => self::auto_cleanup_enabled(),
+                'auto_cleanup_interval' => self::auto_cleanup_interval(),
             ],
         ];
         if ( is_multisite() ) {
@@ -884,12 +1172,32 @@ final class No_Comments_Plugin {
             update_site_option( self::OPTION_NETWORK, $net );
         } elseif ( 'site' === $level ) {
             $src = isset( $data['site'] ) && is_array( $data['site'] ) ? $data['site'] : $data;
+
             foreach ( $site_map as $key => $option ) {
                 if ( array_key_exists( $key, $src ) ) {
                     update_option( $option, $src[ $key ] ? 1 : 0 );
                     $applied['site'][] = $key;
                 }
             }
+            if ( array_key_exists( 'exceptions', $src ) ) {
+                $exceptions = is_array( $src['exceptions'] ) ? $src['exceptions'] : [];
+                update_option( self::OPTION_EXCEPTIONS, array_values( array_unique( array_filter( array_map( 'sanitize_key', $exceptions ) ) ) ) );
+                $applied['site'][] = 'exceptions';
+            }
+            if ( array_key_exists( 'auto_close_days', $src ) ) {
+                update_option( self::OPTION_AUTO_CLOSE_DAYS, max( 0, (int) $src['auto_close_days'] ) );
+                $applied['site'][] = 'auto_close_days';
+            }
+            if ( array_key_exists( 'auto_cleanup', $src ) ) {
+                update_option( self::OPTION_AUTO_CLEANUP, $src['auto_cleanup'] ? 1 : 0 );
+                $applied['site'][] = 'auto_cleanup';
+            }
+            if ( array_key_exists( 'auto_cleanup_interval', $src ) ) {
+                $interval = $src['auto_cleanup_interval'];
+                update_option( self::OPTION_AUTO_CLEANUP_INT, in_array( $interval, [ 'daily', 'twicedaily', 'weekly' ], true ) ? $interval : 'daily' );
+                $applied['site'][] = 'auto_cleanup_interval';
+            }
+            self::maybe_schedule_cleanup();
         }
 
         return $applied;
@@ -1071,12 +1379,16 @@ final class No_Comments_Plugin {
                 'callback'            => [ __CLASS__, 'rest_update_settings' ],
                 'permission_callback' => function () { return current_user_can( 'manage_options' ) || current_user_can( 'manage_network_options' ); },
                 'args'                => [
-                    'level'   => [ 'type' => 'string', 'enum' => [ 'site', 'network' ], 'required' => false ],
-                    'enabled' => [ 'type' => 'boolean', 'required' => false ],
-                    'rest'    => [ 'type' => 'boolean', 'required' => false ],
-                    'xmlrpc'  => [ 'type' => 'boolean', 'required' => false ],
-                    'woo'     => [ 'type' => 'boolean', 'required' => false ],
-                    'enforce' => [ 'type' => 'boolean', 'required' => false ],
+                    'level'                 => [ 'type' => 'string', 'enum' => [ 'site', 'network' ], 'required' => false ],
+                    'enabled'               => [ 'type' => 'boolean', 'required' => false ],
+                    'rest'                  => [ 'type' => 'boolean', 'required' => false ],
+                    'xmlrpc'                => [ 'type' => 'boolean', 'required' => false ],
+                    'woo'                   => [ 'type' => 'boolean', 'required' => false ],
+                    'enforce'               => [ 'type' => 'boolean', 'required' => false ],
+                    'exceptions'            => [ 'type' => 'array', 'required' => false, 'items' => [ 'type' => 'string' ] ],
+                    'auto_close_days'       => [ 'type' => 'integer', 'required' => false ],
+                    'auto_cleanup'          => [ 'type' => 'boolean', 'required' => false ],
+                    'auto_cleanup_interval' => [ 'type' => 'string', 'enum' => [ 'daily', 'twicedaily', 'weekly' ], 'required' => false ],
                 ],
             ],
         ] );
@@ -1117,10 +1429,14 @@ final class No_Comments_Plugin {
         $data = [
             'enabled' => self::is_enabled(),
             'site'    => [
-                'enabled' => (bool) get_option( self::OPTION_KEY, 0 ),
-                'rest'    => (bool) get_option( self::OPTION_REST, 1 ),
-                'xmlrpc'  => (bool) get_option( self::OPTION_XMLRPC, 1 ),
-                'woo'     => (bool) get_option( self::OPTION_WOO, 0 ),
+                'enabled'             => (bool) get_option( self::OPTION_KEY, 0 ),
+                'rest'                => (bool) get_option( self::OPTION_REST, 1 ),
+                'xmlrpc'              => (bool) get_option( self::OPTION_XMLRPC, 1 ),
+                'woo'                 => (bool) get_option( self::OPTION_WOO, 0 ),
+                'exceptions'          => self::exception_types(),
+                'auto_close_days'     => self::auto_close_days(),
+                'auto_cleanup'        => self::auto_cleanup_enabled(),
+                'auto_cleanup_interval' => self::auto_cleanup_interval(),
             ],
             'effective' => [
                 'rest'   => self::get_rest_disabled(),
@@ -1138,12 +1454,16 @@ final class No_Comments_Plugin {
      * REST: POST settings (site o network)
      */
     public static function rest_update_settings( $request ) {
-        $level   = $request->get_param( 'level' ) ?: 'site';
-        $enabled = $request->get_param( 'enabled' );
-        $rest    = $request->get_param( 'rest' );
-        $xmlrpc  = $request->get_param( 'xmlrpc' );
-        $woo     = $request->get_param( 'woo' );
-        $enforce = $request->get_param( 'enforce' );
+        $level      = $request->get_param( 'level' ) ?: 'site';
+        $enabled    = $request->get_param( 'enabled' );
+        $rest       = $request->get_param( 'rest' );
+        $xmlrpc     = $request->get_param( 'xmlrpc' );
+        $woo        = $request->get_param( 'woo' );
+        $enforce    = $request->get_param( 'enforce' );
+        $exceptions = $request->get_param( 'exceptions' );
+        $auto_close = $request->get_param( 'auto_close_days' );
+        $auto_clean = $request->get_param( 'auto_cleanup' );
+        $auto_int   = $request->get_param( 'auto_cleanup_interval' );
 
         if ( 'site' === $level && is_multisite() && class_exists( '\\NoComments\\Infrastructure\\OptionsRepository' ) && \NoComments\Infrastructure\OptionsRepository::is_enforced() ) {
             return new \WP_Error( 'no_comments_network_enforced', __( 'Los ajustes del sitio están controlados por la red.', 'no-comments' ), [ 'status' => 409 ] );
@@ -1165,6 +1485,16 @@ final class No_Comments_Plugin {
             if ( null !== $rest )    { update_option( self::OPTION_REST, $rest ? 1 : 0 ); }
             if ( null !== $xmlrpc )  { update_option( self::OPTION_XMLRPC, $xmlrpc ? 1 : 0 ); }
             if ( null !== $woo )     { update_option( self::OPTION_WOO, $woo ? 1 : 0 ); }
+            if ( null !== $exceptions ) {
+                $exceptions = is_array( $exceptions ) ? $exceptions : [ $exceptions ];
+                update_option( self::OPTION_EXCEPTIONS, array_values( array_unique( array_filter( array_map( 'sanitize_key', $exceptions ) ) ) ) );
+            }
+            if ( null !== $auto_close ) { update_option( self::OPTION_AUTO_CLOSE_DAYS, max( 0, (int) $auto_close ) ); }
+            if ( null !== $auto_clean ) { update_option( self::OPTION_AUTO_CLEANUP, $auto_clean ? 1 : 0 ); }
+            if ( null !== $auto_int && in_array( $auto_int, [ 'daily', 'twicedaily', 'weekly' ], true ) ) {
+                update_option( self::OPTION_AUTO_CLEANUP_INT, $auto_int );
+            }
+            self::maybe_schedule_cleanup();
         }
         return self::rest_get_settings( $request );
     }
@@ -1492,6 +1822,150 @@ if ( defined( 'WP_CLI' ) && WP_CLI ) {
             }
 
             WP_CLI::error( 'Uso: wp no-comments settings export [--file=<ruta>] | wp no-comments settings import <archivo>.' );
+        }
+
+        /**
+         * Controla la limpieza automática de spam.
+         *
+         * ## OPTIONS
+         *
+         * <accion>
+         * : status|run|enable|disable
+         *
+         * [--interval=<interval>]
+         * : daily|twicedaily|weekly (solo con enable; por defecto: daily)
+         *
+         * ## EXAMPLES
+         *
+         * wp no-comments cleanup status
+         * wp no-comments cleanup enable --interval=weekly
+         * wp no-comments cleanup run
+         * wp no-comments cleanup disable
+         */
+        public function cleanup( $args, $assoc_args ) {
+            $action = isset( $args[0] ) ? strtolower( $args[0] ) : 'status';
+
+            if ( 'run' === $action ) {
+                $deleted = No_Comments_Plugin::run_cleanup();
+                WP_CLI::success( sprintf( 'Limpieza ejecutada: %d comentarios de spam eliminados.', $deleted ) );
+                return;
+            }
+
+            if ( 'enable' === $action ) {
+                update_option( No_Comments_Plugin::OPTION_AUTO_CLEANUP, 1 );
+                if ( isset( $assoc_args['interval'] ) && in_array( $assoc_args['interval'], [ 'daily', 'twicedaily', 'weekly' ], true ) ) {
+                    update_option( No_Comments_Plugin::OPTION_AUTO_CLEANUP_INT, $assoc_args['interval'] );
+                }
+                No_Comments_Plugin::maybe_schedule_cleanup();
+                WP_CLI::success( 'Limpieza automática activada (' . No_Comments_Plugin::auto_cleanup_interval() . ').' );
+                return;
+            }
+
+            if ( 'disable' === $action ) {
+                update_option( No_Comments_Plugin::OPTION_AUTO_CLEANUP, 0 );
+                No_Comments_Plugin::maybe_schedule_cleanup();
+                WP_CLI::success( 'Limpieza automática desactivada.' );
+                return;
+            }
+
+            // status
+            $last = get_option( No_Comments_Plugin::OPTION_LAST_CLEANUP, [] );
+            $spam = No_Comments_Plugin::count_comments_for_scope( 'spam' );
+            WP_CLI::log( 'enabled = ' . ( No_Comments_Plugin::auto_cleanup_enabled() ? '1' : '0' ) );
+            WP_CLI::log( 'interval = ' . No_Comments_Plugin::auto_cleanup_interval() );
+            WP_CLI::log( 'spam_count = ' . $spam );
+            if ( is_array( $last ) && ! empty( $last['time'] ) ) {
+                WP_CLI::log( 'last_run = ' . $last['time'] . ' (deleted: ' . (int) $last['deleted'] . ')' );
+            } else {
+                WP_CLI::log( 'last_run = nunca' );
+            }
+        }
+
+        /**
+         * Gestiona las excepciones por tipo de contenido.
+         *
+         * ## OPTIONS
+         *
+         * <accion>
+         * : list|add|remove
+         *
+         * [<tipo>]
+         * : Post type (con add/remove).
+         *
+         * ## EXAMPLES
+         *
+         * wp no-comments exceptions list
+         * wp no-comments exceptions add page
+         * wp no-comments exceptions remove page
+         */
+        public function exceptions( $args ) {
+            $action  = isset( $args[0] ) ? strtolower( $args[0] ) : 'list';
+            $current = get_option( No_Comments_Plugin::OPTION_EXCEPTIONS, [] );
+            if ( ! is_array( $current ) ) {
+                $current = [];
+            }
+
+            if ( 'list' === $action ) {
+                WP_CLI::log( 'Excepciones: ' . ( $current ? implode( ', ', $current ) : '(ninguna)' ) );
+                return;
+            }
+
+            $type = isset( $args[1] ) ? sanitize_key( $args[1] ) : '';
+            if ( 'add' === $action ) {
+                if ( ! $type || ! post_type_exists( $type ) ) {
+                    WP_CLI::error( 'Indicá un post type válido: wp no-comments exceptions add <tipo>.' );
+                }
+                if ( ! in_array( $type, $current, true ) ) {
+                    $current[] = $type;
+                    update_option( No_Comments_Plugin::OPTION_EXCEPTIONS, $current );
+                }
+                WP_CLI::success( 'Excepción agregada: ' . $type );
+                return;
+            }
+
+            if ( 'remove' === $action ) {
+                $current = array_values( array_diff( $current, [ $type ] ) );
+                update_option( No_Comments_Plugin::OPTION_EXCEPTIONS, $current );
+                WP_CLI::success( $type ? ( 'Excepción removida: ' . $type ) : 'Excepciones actualizadas.' );
+                return;
+            }
+
+            WP_CLI::error( 'Uso: wp no-comments exceptions list|add <tipo>|remove <tipo>.' );
+        }
+
+        /**
+         * Configura el cierre automático por antigüedad.
+         *
+         * ## OPTIONS
+         *
+         * [<dias|status|off>]
+         * : Cantidad de días (0 = off, status muestra el valor actual).
+         *
+         * ## EXAMPLES
+         *
+         * wp no-comments auto-close 30
+         * wp no-comments auto-close off
+         * wp no-comments auto-close status
+         */
+        public function auto_close( $args ) {
+            $value = isset( $args[0] ) ? strtolower( $args[0] ) : 'status';
+
+            if ( 'status' === $value ) {
+                WP_CLI::log( 'auto_close_days = ' . No_Comments_Plugin::auto_close_days() );
+                return;
+            }
+            if ( 'off' === $value ) {
+                update_option( No_Comments_Plugin::OPTION_AUTO_CLOSE_DAYS, 0 );
+                WP_CLI::success( 'Cierre automático desactivado.' );
+                return;
+            }
+
+            $days = (int) $value;
+            if ( $days < 0 ) {
+                WP_CLI::error( 'Indicá un número de días (0 o más): wp no-comments auto-close 30.' );
+            }
+            update_option( No_Comments_Plugin::OPTION_AUTO_CLOSE_DAYS, $days );
+            WP_CLI::success( 'Cierre automático configurado: ' . $days . ' días.' );
         }
 
         /**

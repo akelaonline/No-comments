@@ -5,11 +5,11 @@ Tags: comments, disable comments, discussion, spam, delete comments
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.12.0
+Stable tag: 1.13.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Cierra comentarios y pings globalmente y limpia comentarios de forma segura, con dry-run, WooCommerce, Multisite, REST, WP-CLI e import/export de ajustes.
+Cierra comentarios y pings globalmente y limpia comentarios de forma segura, con excepciones por tipo de contenido, cierre automático, limpieza automática, WooCommerce, Multisite, REST y WP-CLI.
 
 == Descripción ==
 
@@ -18,6 +18,9 @@ NO Comments es un plugin liviano para sitios que no necesitan conversación púb
 Características principales:
 
 * Cierre global de comentarios y pings.
+* Excepciones por tipo de contenido: tipos seleccionados conservan comentarios (WooCommerce "product" incluido como excepción cuando corresponde).
+* Cierre automático por antigüedad: cierra formularios y pings en contenido con más de N días, sin apagar el bloqueo del sitio.
+* Limpieza automática de spam por WP-Cron (diaria, dos veces al día o semanal), con registro de cada ejecución.
 * Oculta la UI de comentarios cuando corresponde y bloquea accesos directos.
 * Puede retirar los endpoints REST de comentarios y `wp.newComment` de XML-RPC.
 * Mantiene opcionalmente las reseñas de productos de WooCommerce sin reabrir productos que tengan reviews cerradas individualmente.
@@ -29,6 +32,7 @@ Características principales:
 * Multisite con configuración de red y modo `enforce`.
 * Import/export de ajustes en JSON (UI, REST y WP-CLI).
 * Performance: con el bloqueo activo las consultas de comentarios se cortan sin tocar la base de datos, y los feeds de comentarios se desactivan.
+* Purga de caché de los posts afectados tras un borrado masivo (acción `no_comments_after_delete` e integración con Tucho).
 * Site Health para verificar rápidamente el estado del bloqueo.
 
 No envía datos a servicios externos y no requiere una cuenta de terceros.
@@ -48,9 +52,21 @@ Ajustes → NO Comments → pestaña "Disable Comments" → activa el bloqueo gl
 
 Cuando el bloqueo está activo, NO Comments cierra formularios y pings y puede bloquear las entradas REST/XML-RPC asociadas a comentarios.
 
+= Excepciones por tipo de contenido =
+
+En la pestaña "Disable Comments", el campo "Excepciones" permite conservar comentarios y pings en los tipos de contenido seleccionados aunque el bloqueo global esté activo. El menú de Comentarios y las consultas siguen funcionando para esos tipos. WooCommerce se mantiene como excepción automáticamente cuando la compatibilidad de reseñas está activa.
+
 = Mantener reseñas WooCommerce =
 
 Activa "Mantener reseñas de productos (WooCommerce)" para conservar reviews de productos aunque el resto del sitio tenga los comentarios cerrados. El plugin respeta el estado abierto/cerrado de cada producto.
+
+= Cierre automático por antigüedad =
+
+En "Cierre automático" indica un número de días: los formularios y pings de contenido más antiguo quedan cerrados sin necesidad de apagar el resto del sitio. Aplica cuando el bloqueo global está apagado. Usa 0 para desactivarlo.
+
+= Limpieza automática de spam =
+
+En "Limpieza automática" activa el borrado periódico de spam vía WP-Cron y elige la frecuencia (Diaria, Dos veces al día o Semanal). Cada ejecución borra definitivamente el spam y queda registrada (fecha y cantidad). También puedes ejecutarla manualmente desde WP-CLI.
 
 = Limpiar comentarios =
 
@@ -83,6 +99,15 @@ wp no-comments delete --scope=all --types=post,page --strategy=delete
 wp no-comments woo-reviews on|off|status
 wp no-comments settings export --file=no-comments.json
 wp no-comments settings import no-comments.json
+wp no-comments exceptions list
+wp no-comments exceptions add page
+wp no-comments exceptions remove page
+wp no-comments auto-close 30
+wp no-comments auto-close status
+wp no-comments cleanup status
+wp no-comments cleanup enable --interval=weekly
+wp no-comments cleanup run
+wp no-comments cleanup disable
 ```
 
 == REST API ==
@@ -124,6 +149,15 @@ Sí. La opción de compatibilidad mantiene reviews de productos y respeta si un 
 Sí. Incluye ajustes de red y un modo `enforce` para aplicar una configuración común a todos los sitios.
 
 == Changelog ==
+
+= 1.13.0 =
+* Nuevo: excepciones por tipo de contenido — los tipos seleccionados conservan comentarios y pings con el bloqueo global activo (menú, consultas y formularios). "product" se incluye automáticamente cuando la compatibilidad WooCommerce está activa.
+* Nuevo: cierre automático por antigüedad — cierra formularios y pings en contenido con más de N días, sin apagar el bloqueo del sitio.
+* Nuevo: limpieza automática de spam por WP-Cron — frecuencia diaria, dos veces al día o semanal, con registro de cada ejecución y lock anti-concurrencia.
+* Nuevo: purga de caché tras borrado masivo — acción `no_comments_after_delete` con los posts afectados e integración con Tucho (`tucho_purge_post`).
+* WP-CLI: comandos `exceptions list|add|remove`, `auto-close` y `cleanup status|run|enable|disable`.
+* REST API: `/settings` acepta `exceptions`, `auto_close_days`, `auto_cleanup` y `auto_cleanup_interval`; export/import los incluye.
+* UI: campos "Excepciones", "Cierre automático" y "Limpieza automática" en la pestaña Disable Comments.
 
 = 1.12.0 =
 * Performance: las consultas de comentarios se cortan en el frontend cuando el bloqueo global está activo (hook `comments_pre_query`), sin consultas innecesarias a la base de datos.

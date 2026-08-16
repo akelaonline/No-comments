@@ -18,11 +18,12 @@ class DeleteService {
 	 * @return int Cantidad de comentarios modificados.
 	 */
 	public static function delete( $scope, array $types = array(), $strategy = 'delete' ) {
-		$deleted  = 0;
-		$scope    = in_array( $scope, array( 'spam', 'pending', 'trash', 'all' ), true ) ? $scope : 'spam';
-		$strategy = 'trash' === $strategy ? 'trash' : 'delete';
+		$deleted           = 0;
+		$affected_post_ids = array();
+		$scope             = in_array( $scope, array( 'spam', 'pending', 'trash', 'all' ), true ) ? $scope : 'spam';
+		$strategy          = 'trash' === $strategy ? 'trash' : 'delete';
 
-		$batch_delete = function ( $args ) use ( &$deleted, $types, $strategy ) {
+		$batch_delete = function ( $args ) use ( &$deleted, &$affected_post_ids, $types, $strategy ) {
 			$args = wp_parse_args(
 				$args,
 				array(
@@ -44,9 +45,13 @@ class DeleteService {
 			$force   = ( 'delete' === $strategy ) || ( 'trash' === $status );
 
 			foreach ( $ids as $comment_id ) {
+				$post_id = (int) get_comment_post_ID( $comment_id );
 				if ( wp_delete_comment( $comment_id, $force ) ) {
 					++$deleted;
 					++$changed;
+					if ( $post_id ) {
+						$affected_post_ids[] = $post_id;
+					}
 				}
 			}
 
@@ -96,7 +101,41 @@ class DeleteService {
 				break;
 		}
 
+		if ( $deleted > 0 ) {
+			self::purge_affected_posts( $affected_post_ids, $scope, $strategy );
+		}
+
 		return $deleted;
+	}
+
+	/**
+	 * Purga el caché de los posts afectados tras un borrado real.
+	 *
+	 * Dispara la acción genérica `no_comments_after_delete` para que cualquier
+	 * plugin de caché pueda reaccionar, e integra Tucho (hook `tucho_purge_post`)
+	 * cuando está activo.
+	 *
+	 * @param int[]   $post_ids IDs de posts afectados (sin duplicados).
+	 * @param string  $scope    Alcance ejecutado.
+	 * @param string  $strategy Estrategia ejecutada.
+	 */
+	private static function purge_affected_posts( array $post_ids, $scope, $strategy ) {
+		$post_ids = array_values( array_unique( array_filter( array_map( 'absint', $post_ids ) ) ) );
+		if ( empty( $post_ids ) ) {
+			return;
+		}
+
+		do_action( 'no_comments_after_delete', $post_ids, $scope, $strategy );
+
+		if ( ! has_action( 'tucho_purge_post' ) ) {
+			return;
+		}
+		foreach ( $post_ids as $post_id ) {
+			$post = get_post( $post_id );
+			if ( $post ) {
+				do_action( 'tucho_purge_post', $post_id, $post );
+			}
+		}
 	}
 
 	/**
