@@ -234,7 +234,7 @@ final class No_Comments_Plugin {
         if ( ! current_user_can( 'manage_options' ) ) {
             return;
         }
-        $active_tab = isset( $_GET['tab'] ) ? sanitize_key( $_GET['tab'] ) : 'disable';
+        $active_tab = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : 'disable';
 
         echo '<div class="wrap" id="no-comments-admin">';
         echo '<h1>' . esc_html__( 'NO Comments', 'no-comments' ) . '</h1>';
@@ -259,7 +259,7 @@ final class No_Comments_Plugin {
         foreach ( $tabs as $tab => $label ) {
             $class = ( $active_tab === $tab ) ? ' nav-tab nav-tab-active' : ' nav-tab';
             $url   = esc_url( add_query_arg( [ 'page' => self::PAGE_SLUG, 'tab' => $tab ], admin_url( 'options-general.php' ) ) );
-            echo '<a class="' . esc_attr( $class ) . '" href="' . $url . '">' . esc_html( $label ) . '</a>';
+            echo '<a class="' . esc_attr( $class ) . '" href="' . esc_url( $url ) . '">' . esc_html( $label ) . '</a>';
         }
         echo '</h2>';
 
@@ -279,7 +279,8 @@ final class No_Comments_Plugin {
                 $network_enforced = ! empty( $net['enforce'] );
                 if ( $network_enforced ) {
                     $net_url = esc_url( network_admin_url( 'settings.php?page=' . self::PAGE_SLUG . '-network' ) );
-                    echo '<div class="notice notice-info" style="margin:12px 0 0 0;"><p>' . wp_kses_post( sprintf( __( 'Estos ajustes están controlados por la red. Gestiona los valores desde <a href="%s">NO Comments (Network)</a>.', 'no-comments' ), $net_url ) ) . '</p></div>';
+                    // translators: %s: URL to the network-level NO Comments settings page.
+                    echo '<div class="notice notice-info" style="margin:12px 0 0 0;"><p>' . wp_kses_post( sprintf( __( 'Estos ajustes están controlados por la red. Gestiona los valores desde <a href="%s">NO Comments (Network)</a>.', 'no-comments' ), esc_url( $net_url ) ) ) . '</p></div>';
                 }
             }
 
@@ -293,6 +294,7 @@ final class No_Comments_Plugin {
         }
         // Branding footer
         echo '<hr style="margin-top:24px;opacity:.25;" />';
+        // translators: 1: author/company name, 2: website URL, 3: X profile URL, 4: Instagram profile URL.
         echo '<p style="color:#475569;">' . wp_kses_post( sprintf(
             __( 'Desarrollado por %1$s — <a href="%2$s" target="_blank">Web</a> · <a href="%3$s" target="_blank">X</a> · <a href="%4$s" target="_blank">Instagram</a>', 'no-comments' ),
             'MKT Marketing Digital',
@@ -363,6 +365,7 @@ final class No_Comments_Plugin {
             if ( ! self::keep_woo_reviews() ) {
                 $css .= '#menu-comments, #adminmenu a[href$="edit-comments.php"]{display:none !important;}';
             }
+            // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- $css contains only plugin-defined selectors.
             echo '<style id="no-comments-admin-css">' . $css . '</style>';
         } );
 
@@ -578,7 +581,7 @@ final class No_Comments_Plugin {
         // Región aria-live para feedback
         echo '<div id="nc-live" class="screen-reader-text" aria-live="polite"></div>';
 
-        $action_url = esc_url( admin_url( 'admin-post.php' ) );
+        $action_url = admin_url( 'admin-post.php' );
 
         // Acciones rápidas (enlaces que preseleccionan alcance y tipos)
         $base_delete_url = add_query_arg( [ 'page' => self::PAGE_SLUG, 'tab' => 'delete' ], admin_url( 'options-general.php' ) );
@@ -596,21 +599,29 @@ final class No_Comments_Plugin {
         }
         echo '</div>';
         // Quick select via query params
-        $selected_scope = isset( $_GET['scope'] ) ? sanitize_key( $_GET['scope'] ) : 'spam';
-        $pre_types = [];
-        if ( ! empty( $_GET['types'] ) ) {
-            $pre_types = array_filter( array_map( 'sanitize_key', array_map( 'trim', explode( ',', wp_unslash( $_GET['types'] ) ) ) ) );
+        $selected_scope = isset( $_GET['scope'] ) ? sanitize_key( wp_unslash( $_GET['scope'] ) ) : 'spam';
+        $pre_types      = [];
+        $types_query    = isset( $_GET['types'] ) ? sanitize_text_field( wp_unslash( $_GET['types'] ) ) : '';
+        if ( '' !== $types_query ) {
+            $pre_types = array_filter( array_map( 'sanitize_key', array_map( 'trim', explode( ',', $types_query ) ) ) );
         }
 
-        echo '<form method="post" action="' . $action_url . '">';
+        echo '<form method="post" action="' . esc_url( $action_url ) . '">';
         wp_nonce_field( 'no_comments_delete_action', '_wpnonce_no_comments_delete' );
         echo '<input type="hidden" name="action" value="no_comments_delete" />';
 
         // Segmented control (mejora visual, radios siguen para accesibilidad)
         echo '<div class="nc-segment" role="group" aria-label="' . esc_attr__( 'Ámbito de borrado', 'no-comments' ) . '">';
-        foreach ( [ 'spam' => 'Spam', 'pending' => 'Pendientes', 'trash' => 'Papelera', 'all' => 'Todos' ] as $sc => $lab ) {
+        foreach (
+            [
+                'spam'    => __( 'Spam', 'no-comments' ),
+                'pending' => __( 'Pendientes', 'no-comments' ),
+                'trash'   => __( 'Papelera', 'no-comments' ),
+                'all'     => __( 'Todos', 'no-comments' ),
+            ] as $sc => $lab
+        ) {
             $pressed = $selected_scope === $sc ? 'true' : 'false';
-            echo '<button class="button" data-scope="' . esc_attr( $sc ) . '" aria-pressed="' . esc_attr( $pressed ) . '">' . esc_html__( $lab, 'no-comments' ) . '</button>';
+            echo '<button class="button" data-scope="' . esc_attr( $sc ) . '" aria-pressed="' . esc_attr( $pressed ) . '">' . esc_html( $lab ) . '</button>';
         }
         echo '</div>';
 
@@ -627,8 +638,8 @@ final class No_Comments_Plugin {
             foreach ( $types as $slug => $obj ) {
                 $label = isset( $obj->labels->singular_name ) ? $obj->labels->singular_name : $slug;
                 echo '<label style="display:inline-block;margin:2px 10px 2px 0;">';
-                $ck = in_array( $slug, $pre_types, true ) ? ' checked' : '';
-                echo '<input type="checkbox" name="delete_types[]" value="' . esc_attr( $slug ) . '"' . $ck . '> ' . esc_html( $label );
+                $ck = checked( in_array( $slug, $pre_types, true ), true, false );
+                echo '<input type="checkbox" name="delete_types[]" value="' . esc_attr( $slug ) . '" ' . $ck . '> ' . esc_html( $label ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- checked() returns a safe HTML attribute.
                 echo '</label>';
             }
             echo '<p class="description">' . esc_html__( 'Si no seleccionas ningún tipo, se aplicará a todos.', 'no-comments' ) . '</p>';
@@ -650,19 +661,19 @@ final class No_Comments_Plugin {
 
         // Mensajes de resultado con detalle
         if ( isset( $_GET['deleted'] ) && isset( $_GET['scope'] ) ) {
-            $deleted  = intval( $_GET['deleted'] );
-            $scope    = sanitize_key( $_GET['scope'] );
-            $sim      = isset( $_GET['dry'] ) && '1' === $_GET['dry'];
-            $strategy = isset( $_GET['strategy'] ) ? sanitize_key( $_GET['strategy'] ) : '';
+            $deleted  = absint( $_GET['deleted'] );
+            $scope    = sanitize_key( wp_unslash( $_GET['scope'] ) );
+            $sim      = isset( $_GET['dry'] ) && '1' === sanitize_key( wp_unslash( $_GET['dry'] ) );
+            $strategy = isset( $_GET['strategy'] ) ? sanitize_key( wp_unslash( $_GET['strategy'] ) ) : '';
             $types_q  = isset( $_GET['types'] ) ? sanitize_text_field( wp_unslash( $_GET['types'] ) ) : '';
-            $types_h  = $types_q ? esc_html( $types_q ) : esc_html__( 'todos', 'no-comments' );
+            $types_h  = $types_q ? $types_q : __( 'todos', 'no-comments' );
             $msg      = $sim ? __( 'Simulación (dry‑run): se borrarían', 'no-comments' ) : __( 'Eliminados', 'no-comments' );
             printf( '<div class="notice %s nc-result" role="status" aria-live="polite"><p>%s %d — %s: %s · %s: %s · %s: %s.</p></div>',
                 $sim ? 'notice-info' : 'updated',
                 esc_html( $msg ),
-                $deleted,
+                absint( $deleted ),
                 esc_html__( 'alcance', 'no-comments' ), esc_html( $scope ),
-                esc_html__( 'tipos', 'no-comments' ), $types_h,
+                esc_html__( 'tipos', 'no-comments' ), esc_html( $types_h ),
                 esc_html__( 'estrategia', 'no-comments' ), esc_html( $strategy ?: '-' )
             );
         }
@@ -678,17 +689,16 @@ final class No_Comments_Plugin {
         }
         check_admin_referer( 'no_comments_delete_action', '_wpnonce_no_comments_delete' );
 
-        $scope   = isset( $_POST['delete_scope'] ) ? sanitize_key( $_POST['delete_scope'] ) : 'spam';
-        $confirm = isset( $_POST['confirm'] ) ? trim( wp_unslash( $_POST['confirm'] ) ) : '';
-        $dry_run = ! empty( $_POST['dry_run'] );
-        $strategy = isset( $_POST['delete_strategy'] ) && 'trash' === sanitize_key( $_POST['delete_strategy'] ) ? 'trash' : 'delete';
-        $types   = [];
-        if ( ! empty( $_POST['delete_types'] ) && is_array( $_POST['delete_types'] ) ) {
-            foreach ( $_POST['delete_types'] as $t ) {
-                $types[] = sanitize_key( $t );
-            }
-            $types = array_values( array_unique( array_filter( $types ) ) );
+        $scope    = isset( $_POST['delete_scope'] ) ? sanitize_key( wp_unslash( $_POST['delete_scope'] ) ) : 'spam';
+        $confirm  = isset( $_POST['confirm'] ) ? sanitize_text_field( wp_unslash( $_POST['confirm'] ) ) : '';
+        $dry_run  = ! empty( $_POST['dry_run'] );
+        $strategy = isset( $_POST['delete_strategy'] ) && 'trash' === sanitize_key( wp_unslash( $_POST['delete_strategy'] ) ) ? 'trash' : 'delete';
+        $types    = [];
+        $raw_types = isset( $_POST['delete_types'] ) && is_array( $_POST['delete_types'] ) ? wp_unslash( $_POST['delete_types'] ) : [];
+        foreach ( $raw_types as $t ) {
+            $types[] = sanitize_key( $t );
         }
+        $types = array_values( array_unique( array_filter( $types ) ) );
 
         if ( ! $dry_run && 'DELETE' !== $confirm ) {
             wp_safe_redirect( add_query_arg( [ 'page' => self::PAGE_SLUG, 'tab' => 'delete', 'msg' => 'confirm' ], admin_url( 'options-general.php' ) ) );
@@ -972,8 +982,8 @@ final class No_Comments_Plugin {
         if ( isset( $_GET['updated'] ) ) {
             echo '<div class="updated notice"><p>' . esc_html__( 'Ajustes de red guardados.', 'no-comments' ) . '</p></div>';
         }
-        $action = esc_url( admin_url( 'admin-post.php' ) );
-        echo '<form method="post" action="' . $action . '">';
+        $action = admin_url( 'admin-post.php' );
+        echo '<form method="post" action="' . esc_url( $action ) . '">';
         wp_nonce_field( 'no_comments_network_save', '_wpnonce_no_comments_network' );
         echo '<input type="hidden" name="action" value="no_comments_network_save" />';
 
