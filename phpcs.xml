@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <ruleset name="NO Comments">
-  <description>WordPress Coding Standards for NO Comments.</description>
+  <description>PSR-12 plus WordPress security and internationalization checks for NO Comments.</description>
 
   <file>no-comments/</file>
 
@@ -11,10 +11,15 @@
   <exclude-pattern>no-comments/languages/*</exclude-pattern>
   <exclude-pattern>vendor/*</exclude-pattern>
 
-  <rule ref="WordPress">
-    <!-- The plugin uses PSR-4-style namespaced class files. -->
-    <exclude name="WordPress.Files.FileName.InvalidClassFileName" />
+  <!-- Preserve the project's established PHP style. -->
+  <rule ref="PSR12" />
+
+  <!-- Add WordPress-specific safety checks without forcing WordPress Core formatting. -->
+  <rule ref="WordPress.Security">
+    <!-- Query-string values used only to render admin state do not mutate data. -->
+    <exclude name="WordPress.Security.NonceVerification.Recommended" />
   </rule>
+  <rule ref="WordPress.WP.I18n" />
 
   <config name="minimum_supported_wp_version" value="5.9" />
 </ruleset>
