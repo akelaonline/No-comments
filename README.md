@@ -1,115 +1,265 @@
-# NO Comments (WordPress)
+# NO Comments
 
-[![CI](https://github.com/akelaonline/No-comments/actions/workflows/ci.yml/badge.svg)](https://github.com/akelaonline/No-comments/actions/workflows/ci.yml)
-![WordPress](https://img.shields.io/badge/WordPress-6.6-blue)
-![PHP](https://img.shields.io/badge/PHP-%3E%3D7.4-777bb3)
-![License](https://img.shields.io/badge/License-GPL--2.0--or--later-green)
+**Disable WordPress comments completely — without breaking WooCommerce reviews when you still need them.**
 
-Plugin minimalista para cerrar TODOS los comentarios y pings del sitio, con herramientas seguras para borrar comentarios (spam / pendientes / papelera / todos). Incluye WP‑CLI, REST API, compatibilidad WooCommerce y soporte Multisite con ajustes de red.
+[![Quality](https://github.com/akelaonline/No-comments/actions/workflows/ci.yml/badge.svg)](https://github.com/akelaonline/No-comments/actions/workflows/ci.yml)
+![Version](https://img.shields.io/badge/version-1.11.0-111827)
+![WordPress](https://img.shields.io/badge/WordPress-tested%20to%207.0-21759b)
+![PHP](https://img.shields.io/badge/PHP-7.4%E2%80%938.5-777bb4)
+![License](https://img.shields.io/badge/license-GPL--2.0--or--later-16a34a)
 
-> Autor: [MKT Marketing Digital](https://mktmarketingdigital.com)
+NO Comments is a focused WordPress utility for sites that do not need public discussion. One switch closes comments and pings site-wide; optional hardening removes comment entry points from REST/XML-RPC; cleanup tools let administrators safely inspect, trash, or permanently delete existing comments.
 
-## Características clave
+It is intentionally small, self-hosted and telemetry-free.
 
-- Cierre global de comentarios y pings en todo el sitio.
-- Opcional: bloquear endpoint REST de comentarios y XML‑RPC `wp.newComment`.
-- Compatibilidad WooCommerce: mantener reseñas de productos (incluso con cierre global).
-- Borrado masivo: alcances Spam / Pendientes / Papelera / Todos, con dry‑run y filtro por tipos de post; estrategia Papelera o Borrado definitivo.
-- WP‑CLI completo y REST API propia (automatización lista para CI/CD).
-- Multisite: ajustes de red con modo "enforce" para aplicar a todos los sitios.
-- UI moderna: quick actions, contadores clicables, segment control de alcance, confirmación y accesibilidad.
+## Why this exists
 
-## Multisite
+Turning off “Allow people to submit comments” in WordPress is not always the end of the story. Existing content can retain comment settings, comment-related admin UI remains visible, APIs may still expose comment routes, and old spam can keep accumulating operational clutter.
 
-- Los ajustes de red se guardan en `site_option:no_comments_network_settings`.
-- "Enforce" fuerza los valores (enabled, REST, XML‑RPC y Woo Reviews) a todos los sitios.
-- En la pantalla del sitio se muestra aviso cuando la red controla los ajustes.
+NO Comments gives that job one dedicated place:
 
-## Instalación
+- close comments and pings globally;
+- hide comment-management UI when it is no longer useful;
+- optionally remove comment REST endpoints and XML-RPC comment creation;
+- preserve WooCommerce product reviews when required;
+- safely clean old comments with dry-runs and scoped deletion;
+- enforce one policy across WordPress Multisite;
+- automate administration through WP-CLI or authenticated REST requests.
 
-1. Subí el ZIP desde Plugins → Añadir nuevo → Subir plugin (usá el release `.zip`).
-2. Activá el plugin.
-3. Ir a Ajustes → NO Comments.
+## Features
 
-Para Multisite, gestioná desde Network Admin → Ajustes → NO Comments (Network).
+### Global comment shutdown
 
-## Uso rápido
+- Closes comments across public post types.
+- Closes pings/trackbacks.
+- Removes comment support from public post types while enabled.
+- Hides the Comments menu/admin-bar item where appropriate.
+- Redirects direct access to comment/discussion screens.
+- Exposes the current state through WordPress Site Health.
 
-- Pestaña "Disable Comments": activá el toggle y (opcional) los cortes de REST/XML‑RPC.
-- Pestaña "Delete Comments":
-  - Elegí el alcance (Spam / Pendientes / Papelera / Todos) con el segment control o clickeando los contadores.
-  - Activá "Simulación (dry‑run)" para ver cuántos comentarios afectás.
-  - Si querés limitar por tipos de post, seleccioná en el checklist.
-  - Elegí la estrategia: Borrar definitivamente o Mover a Papelera.
-  - Para ejecución real, desmarcá dry‑run y escribí `DELETE` para confirmar.
+### API hardening
 
-## WP‑CLI
+When enabled, you can independently:
+
+- remove the core `wp/v2/comments` REST routes;
+- remove the XML-RPC `wp.newComment` method.
+
+NO Comments also rejects new comment insertion using WordPress' `pre_comment_approved` flow, which supports a proper `WP_Error` response.
+
+### Safe cleanup
+
+The **Delete Comments** screen supports:
+
+- Spam;
+- Pending;
+- Trash;
+- All comments;
+- optional post-type filters;
+- dry-run counting before mutation;
+- permanent deletion;
+- reversible movement to Trash;
+- an explicit `DELETE` confirmation before destructive execution.
+
+A key safety rule in 1.11.0: **All + Move to Trash does not empty Trash in the same operation.** Existing or newly trashed comments remain recoverable until you explicitly empty Trash.
+
+### WooCommerce-aware
+
+Enable **Keep product reviews** to leave product reviews available while comments stay disabled everywhere else.
+
+The plugin preserves each product's own review state: it will not force-open a product whose reviews were intentionally closed.
+
+The compatibility option can also be configured before WooCommerce is activated.
+
+### Multisite
+
+Network administrators can define:
+
+- global comment state;
+- REST blocking;
+- XML-RPC blocking;
+- WooCommerce review compatibility;
+- `enforce` mode across all sites.
+
+When network enforcement is active, site-level settings are treated as read-only and the administrative REST endpoint rejects conflicting site-level writes.
+
+## Requirements
+
+| Component | Requirement |
+|---|---|
+| WordPress | 5.9+ |
+| Tested with | WordPress 7.0.x |
+| PHP | 7.4+ |
+| CI matrix | PHP 7.4, 8.0, 8.2, 8.3, 8.4, 8.5 |
+| License | GPL-2.0-or-later |
+
+The included Docker development environment targets WordPress 7.0.2 on PHP 8.3.
+
+## Installation
+
+### From a release ZIP
+
+1. Download the release ZIP.
+2. In WordPress, open **Plugins → Add New → Upload Plugin**.
+3. Upload and activate it.
+4. Open **Settings → NO Comments**.
+
+### From source
+
+Copy the `no-comments/` directory into:
+
+```text
+wp-content/plugins/no-comments/
+```
+
+Then activate **NO Comments** from WordPress Admin.
+
+## WP-CLI
 
 ```bash
-# Estado
+# Current state
 wp no-comments status
 
-# Activar / desactivar
+# Enable / disable global blocking
 wp no-comments enable
 wp no-comments disable
 
-# Borrar (dry-run primero)
+# Always inspect first
 wp no-comments delete --scope=spam --dry-run
+
+# Delete comments for selected post types
 wp no-comments delete --scope=all --types=post,page
 
-# Woo reviews (compat)
-wp no-comments woo-reviews on|off|status
+# WooCommerce review compatibility
+wp no-comments woo-reviews on
+wp no-comments woo-reviews off
+wp no-comments woo-reviews status
 ```
 
 ## REST API
 
-- `GET  /wp-json/no-comments/v1/settings` — snapshot efectivo (site/network).
-- `POST /wp-json/no-comments/v1/settings` — body JSON: `level (site|network)`, `enabled`, `rest`, `xmlrpc`, `woo`, `enforce`.
-- `POST /wp-json/no-comments/v1/actions/delete` — body JSON: `scope`, `types`, `strategy`, `dry_run`.
+Administrative endpoints:
 
-> Protegé con nonces/cookies de admin o credenciales de aplicación.
+```text
+GET  /wp-json/no-comments/v1/settings
+POST /wp-json/no-comments/v1/settings
+POST /wp-json/no-comments/v1/actions/delete
+```
 
-## Desarrollo
+Settings payload fields:
 
-- Linter: WPCS + PSR‑12 (`phpcs.xml`).
-- CI: GitHub Actions (`.github/workflows/ci.yml`).
-- Composer scripts:
+```json
+{
+  "level": "site",
+  "enabled": true,
+  "rest": true,
+  "xmlrpc": true,
+  "woo": false,
+  "enforce": false
+}
+```
+
+Delete payload example:
+
+```json
+{
+  "scope": "spam",
+  "types": ["post", "page"],
+  "strategy": "delete",
+  "dry_run": true
+}
+```
+
+Endpoints require the corresponding WordPress administrator capabilities. For remote automation, use WordPress Application Passwords over HTTPS or another supported authenticated WordPress flow.
+
+## Privacy
+
+NO Comments does **not**:
+
+- collect telemetry;
+- create an external account;
+- call a SaaS backend;
+- send comment content off-site.
+
+All settings and cleanup operations stay inside your WordPress installation.
+
+## Development
+
+Install development dependencies:
 
 ```bash
 composer install
+```
+
+Run code quality checks:
+
+```bash
 composer lint
 composer run lint:report
 composer fix
 ```
 
-Estructura principal:
+GitHub Actions validates:
 
-```text
-no-comments/
-  no-comments.php
-  includes/
-    Application/
-      DeleteService.php
-    Infrastructure/
-      OptionsRepository.php
-  languages/
-  uninstall.php
+- Composer metadata;
+- PHP syntax;
+- WordPress Coding Standards;
+- PHP 7.4 through 8.5;
+- the official WordPress Plugin Check action.
+
+For a disposable WordPress environment:
+
+```bash
+cd dev
+cp .env.example .env
+docker compose up -d
 ```
 
-## Changelog (resumen)
+See [`dev/README.md`](dev/README.md) for the smoke-test checklist.
 
-- 1.10.1 — UI polish: segmented control, contadores clicables, quick actions, confirm modal, aria‑live, tooltips; fix selector JS.
-- 1.10.0 — REST API para settings/delete; release multisite + CLI ampliado.
-- 1.9.0  — Ajustes de red con "enforce" y compatibilidad Woo en multisite.
+## Repository structure
 
-> El changelog completo vive en `no-comments/readme.txt` (formato WordPress).
+```text
+.
+├── .github/workflows/      # CI and release automation
+├── dev/                    # local WordPress Docker environment
+├── no-comments/            # distributable plugin
+│   ├── includes/
+│   │   ├── Application/
+│   │   └── Infrastructure/
+│   ├── languages/
+│   ├── no-comments.php
+│   ├── readme.txt
+│   └── uninstall.php
+├── composer.json
+├── phpcs.xml
+├── CONTRIBUTING.md
+├── SECURITY.md
+└── LICENSE
+```
 
-## Licencia
+## Releases
 
-GPL‑2.0‑or‑later. Ver encabezado del plugin y `no-comments/readme.txt`.
+Source code stays source-only: release ZIPs are not committed to the repository.
 
-## Enlaces
+Tags matching `v*` trigger the release workflow, which packages only the distributable `no-comments/` directory and creates a GitHub Release with the ZIP attached.
 
-- [Web](https://mktmarketingdigital.com)
-- [X/Twitter](https://x.com/akelaonline)
-- [Instagram](https://www.instagram.com/akelaonline)
+## Contributing
+
+Bug reports, compatibility findings and focused pull requests are welcome. Please read [`CONTRIBUTING.md`](CONTRIBUTING.md) before opening a PR.
+
+For security issues, do not publish exploit details in a normal issue. Follow [`SECURITY.md`](SECURITY.md).
+
+## Author
+
+Created and maintained by **Alejandro D. José** (`@akelaonline`).
+
+I build products at the intersection of AI, automation, digital marketing and WordPress. I lead **MKT Marketing Digital** and maintain this repository as part of my public WordPress/open-source work.
+
+- GitHub: [akelaonline](https://github.com/akelaonline)
+- LinkedIn: [Alejandro D. José](https://www.linkedin.com/in/akelaonline/)
+- MKT Marketing Digital: [mktmarketingdigital.com](https://mktmarketingdigital.com/)
+- Marketing Digital Experience: [marketingdigitalexperience.com](https://marketingdigitalexperience.com/)
+
+## License
+
+NO Comments is free software licensed under **GPL-2.0-or-later**. See [`LICENSE`](LICENSE).
