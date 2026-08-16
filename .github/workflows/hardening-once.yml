@@ -1,0 +1,101 @@
+name: One-time hardening patch
+
+on:
+  push:
+    branches:
+      - agent/public-release-hardening
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/public-release-hardening
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+
+      - name: Apply guarded patch
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          path = Path('no-comments/no-comments.php')
+          text = path.read_text()
+
+          def replace_once(old, new, label):
+              global text
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected exactly 1 match, found {count}')
+              text = text.replace(old, new, 1)
+
+          replace_once(
+          """ * Description: Toggle simple para deshabilitar comentarios y pings en todo el sitio, con herramientas para borrar comentarios (spam/pendientes/papelera/todos).\n * Version: 1.10.1\n * Author: MKT Marketing Digital\n * Plugin URI: https://mktmarketingdigital.com/\n * Author URI: https://mktmarketingdigital.com/\n * License: GPLv2 or later\n * Text Domain: no-comments\n * Domain Path: /languages""",
+          """ * Description: Disable comments and pings site-wide, preserve WooCommerce reviews, and safely clean up comments with dry runs.\n * Version: 1.11.0\n * Requires at least: 5.9\n * Requires PHP: 7.4\n * Author: Alejandro D. José\n * Plugin URI: https://github.com/akelaonline/No-comments\n * Author URI: https://github.com/akelaonline\n * License: GPLv2 or later\n * License URI: https://www.gnu.org/licenses/gpl-2.0.html\n * Update URI: https://github.com/akelaonline/No-comments\n * Text Domain: no-comments\n * Domain Path: /languages""",
+          'plugin header')
+
+          replace_once(
+          """        // Rechazar a bajo nivel\n        add_filter( 'preprocess_comment', [ __CLASS__, 'filter_preprocess_comment' ] );""",
+          """        // Rechazar nuevas inserciones con un hook que admite WP_Error.\n        add_filter( 'pre_comment_approved', [ __CLASS__, 'filter_pre_comment_approved' ], 10, 2 );""",
+          'comment rejection hook')
+
+          replace_once(
+          """    /** Filtro: bloquear creación salvo productos */\n    public static function filter_preprocess_comment( $commentdata ) {\n        if ( ! self::is_enabled() ) {\n            return $commentdata;\n        }\n        if ( self::keep_woo_reviews() && ! empty( $commentdata['comment_post_ID'] ) ) {\n            $post = get_post( (int) $commentdata['comment_post_ID'] );\n            if ( $post && 'product' === $post->post_type ) {\n                return $commentdata; // permitir review\n            }\n        }\n        return new WP_Error( 'no_comments_disabled', __( 'Los comentarios están cerrados en todo el sitio.', 'no-comments' ), [ 'status' => 403 ] );\n    }""",
+          """    /** Filtro: bloquear creación salvo productos. */\n    public static function filter_pre_comment_approved( $approved, $commentdata ) {\n        if ( ! self::is_enabled() ) {\n            return $approved;\n        }\n        if ( self::keep_woo_reviews() && ! empty( $commentdata['comment_post_ID'] ) ) {\n            $post = get_post( (int) $commentdata['comment_post_ID'] );\n            if ( $post && 'product' === $post->post_type ) {\n                return $approved; // Respetar el flujo normal de reviews.\n            }\n        }\n        return new WP_Error( 'no_comments_disabled', __( 'Los comentarios están cerrados en todo el sitio.', 'no-comments' ), [ 'status' => 403 ] );\n    }""",
+          'comment rejection callback')
+
+          replace_once(
+          """            if ( $post && 'product' === $post->post_type ) {\n                return true; // permitir reviews en productos\n            }""",
+          """            if ( $post && 'product' === $post->post_type ) {\n                return $open; // Respetar si las reviews del producto están abiertas o cerradas.\n            }""",
+          'WooCommerce comments_open preservation')
+
+          replace_once(
+          """        $keep_reviews = (bool) get_option( self::OPTION_WOO, 0 );\n        $disabled     = ! class_exists( 'WooCommerce' );\n        $attr_dis     = $disabled ? ' disabled=\"disabled\"' : '';\n        echo '<p>' . esc_html__( 'Opciones de compatibilidad con plugins de terceros.', 'no-comments' ) . '</p>';\n        echo '<label style=\"display:block;margin:4px 0;\">';\n        echo '<input type=\"hidden\" name=\"' . esc_attr( self::OPTION_WOO ) . '\" value=\"0\" />';\n        echo '<input type=\"checkbox\" name=\"' . esc_attr( self::OPTION_WOO ) . '\" value=\"1\" ' . checked( $keep_reviews, true, false ) . $attr_dis . ' /> ' . esc_html__( 'Mantener reseñas de productos (WooCommerce)', 'no-comments' );\n        echo '</label>';\n        if ( $disabled ) {\n            echo '<p class=\"description\">' . esc_html__( 'WooCommerce no está activo en este sitio. Este ajuste tendrá efecto cuando esté activo.', 'no-comments' ) . '</p>';\n        }""",
+          """        $keep_reviews  = (bool) get_option( self::OPTION_WOO, 0 );\n        $woo_is_active = class_exists( 'WooCommerce' );\n        echo '<p>' . esc_html__( 'Opciones de compatibilidad con plugins de terceros.', 'no-comments' ) . '</p>';\n        echo '<label style=\"display:block;margin:4px 0;\">';\n        echo '<input type=\"hidden\" name=\"' . esc_attr( self::OPTION_WOO ) . '\" value=\"0\" />';\n        echo '<input type=\"checkbox\" name=\"' . esc_attr( self::OPTION_WOO ) . '\" value=\"1\" ' . checked( $keep_reviews, true, false ) . ' /> ' . esc_html__( 'Mantener reseñas de productos (WooCommerce)', 'no-comments' );\n        echo '</label>';\n        if ( ! $woo_is_active ) {\n            echo '<p class=\"description\">' . esc_html__( 'WooCommerce no está activo. Puedes dejar esta opción preparada y tendrá efecto cuando WooCommerce se active.', 'no-comments' ) . '</p>';\n        }""",
+          'WooCommerce compatibility setting')
+
+          replace_once(
+          """            // Aviso si los ajustes están forzados por la red\n            if ( is_multisite() ) {\n                $net = self::get_network_settings();\n                if ( ! empty( $net['enforce'] ) ) {\n                    $net_url = esc_url( network_admin_url( 'settings.php?page=' . self::PAGE_SLUG . '-network' ) );\n                    echo '<div class=\"notice notice-info\" style=\"margin:12px 0 0 0;\"><p>' . wp_kses_post( sprintf( __( 'Estos ajustes están controlados por la red. Gestiona los valores desde <a href=\"%s\">NO Comments (Network)</a>.', 'no-comments' ), $net_url ) ) . '</p></div>';\n                }\n            }\n\n            echo '<form action=\"options.php\" method=\"post\">';\n            settings_fields( self::SETTINGS_GROUP );\n            do_settings_sections( self::PAGE_SLUG );\n            submit_button();\n            echo '</form>';""",
+          """            // Aviso si los ajustes están forzados por la red.\n            $network_enforced = false;\n            if ( is_multisite() ) {\n                $net              = self::get_network_settings();\n                $network_enforced = ! empty( $net['enforce'] );\n                if ( $network_enforced ) {\n                    $net_url = esc_url( network_admin_url( 'settings.php?page=' . self::PAGE_SLUG . '-network' ) );\n                    echo '<div class=\"notice notice-info\" style=\"margin:12px 0 0 0;\"><p>' . wp_kses_post( sprintf( __( 'Estos ajustes están controlados por la red. Gestiona los valores desde <a href=\"%s\">NO Comments (Network)</a>.', 'no-comments' ), $net_url ) ) . '</p></div>';\n                }\n            }\n\n            if ( ! $network_enforced ) {\n                echo '<form action=\"options.php\" method=\"post\">';\n                settings_fields( self::SETTINGS_GROUP );\n                do_settings_sections( self::PAGE_SLUG );\n                submit_button();\n                echo '</form>';\n            }""",
+          'network-enforced settings form')
+
+          replace_once(
+          """                    var scope=form.querySelector(\"input[name=delete_scope]:checked\");\n                    var msg=\"¿Seguro que deseas ejecutar la limpieza (\"+(scope?scope.value:\"?\")+\")? Esta acción no se puede deshacer.\";\n                    if(!window.confirm(msg)){ e.preventDefault(); return false; }""",
+          """                    var scope=form.querySelector(\"input[name=delete_scope]:checked\");\n                    var strategy=form.querySelector(\"input[name=delete_strategy]:checked\");\n                    var reversible=strategy && strategy.value===\"trash\" && (!scope || scope.value!==\"trash\");\n                    var msg=reversible\n                        ? \"¿Mover los comentarios seleccionados a la Papelera? Podrás restaurarlos después.\"\n                        : \"¿Seguro que deseas ejecutar la limpieza (\"+(scope?scope.value:\"?\")+\")? Esta acción no se puede deshacer.\";\n                    if(!window.confirm(msg)){ e.preventDefault(); return false; }""",
+          'delete confirmation copy')
+
+          replace_once(
+          """        check_admin_referer( 'no_comments_toggle_action', '_wpnonce_no_comments_toggle' );\n        $current = self::is_enabled();""",
+          """        check_admin_referer( 'no_comments_toggle_action', '_wpnonce_no_comments_toggle' );\n\n        if ( is_multisite() && class_exists( '\\\\NoComments\\\\Infrastructure\\\\OptionsRepository' ) && \\NoComments\\Infrastructure\\OptionsRepository::is_enforced() ) {\n            wp_safe_redirect( add_query_arg( [ 'page' => self::PAGE_SLUG ], admin_url( 'options-general.php' ) ) );\n            exit;\n        }\n\n        $current = self::is_enabled();""",
+          'network-enforced quick toggle')
+
+          replace_once(
+          """        $enforce = $request->get_param( 'enforce' );\n\n        if ( 'network' === $level && is_multisite() ) {""",
+          """        $enforce = $request->get_param( 'enforce' );\n\n        if ( 'site' === $level && is_multisite() && class_exists( '\\\\NoComments\\\\Infrastructure\\\\OptionsRepository' ) && \\NoComments\\Infrastructure\\OptionsRepository::is_enforced() ) {\n            return new \\WP_Error( 'no_comments_network_enforced', __( 'Los ajustes del sitio están controlados por la red.', 'no-comments' ), [ 'status' => 409 ] );\n        }\n\n        if ( 'network' === $level && is_multisite() ) {""",
+          'network-enforced REST settings')
+
+          path.write_text(text)
+          PY
+
+          php -l no-comments/no-comments.php
+
+      - name: Commit guarded patch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add no-comments/no-comments.php
+          git diff --cached --check
+          git commit -m "Harden comment blocking and multisite behavior [hardening-bot]"
+          git push origin HEAD:agent/public-release-hardening
