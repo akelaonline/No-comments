@@ -1,0 +1,63 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify tag matches plugin version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          PLUGIN_VERSION="$(sed -n 's/^ \* Version: //p' no-comments/no-comments.php | head -n1 | tr -d '\r')"
+
+          if [ -z "$PLUGIN_VERSION" ]; then
+            echo "Could not read plugin Version header." >&2
+            exit 1
+          fi
+
+          if [ "$TAG_VERSION" != "$PLUGIN_VERSION" ]; then
+            echo "Tag version ($TAG_VERSION) does not match plugin header ($PLUGIN_VERSION)." >&2
+            exit 1
+          fi
+
+          echo "version=$PLUGIN_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Build plugin ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          ZIP="no-comments-${VERSION}.zip"
+          zip -r "$ZIP" no-comments \
+            -x '*/.DS_Store' \
+            -x '*/Thumbs.db'
+          sha256sum "$ZIP" > "${ZIP}.sha256"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          ZIP="no-comments-${VERSION}.zip"
+          gh release create "$GITHUB_REF_NAME" \
+            "$ZIP" \
+            "${ZIP}.sha256" \
+            --title "NO Comments ${VERSION}" \
+            --generate-notes \
+            --verify-tag
