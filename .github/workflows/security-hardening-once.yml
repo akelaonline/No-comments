@@ -1,0 +1,142 @@
+name: Security hardening once
+
+on:
+  push:
+    branches:
+      - agent/public-release-hardening
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v6
+        with:
+          ref: agent/public-release-hardening
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+
+      - name: Apply guarded security patch
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          path = Path('no-comments/no-comments.php')
+          text = path.read_text()
+
+          def replace_once(old, new, label):
+              global text
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected exactly 1 match, found {count}')
+              text = text.replace(old, new, 1)
+
+          replace_once(
+              "$active_tab = isset( $_GET['tab'] ) ? sanitize_key( $_GET['tab'] ) : 'disable';",
+              "$active_tab = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : 'disable';",
+              'tab sanitization',
+          )
+
+          replace_once(
+              "echo '<a class=\"' . esc_attr( $class ) . '\" href=\"' . $url . '\">' . esc_html( $label ) . '</a>';",
+              "echo '<a class=\"' . esc_attr( $class ) . '\" href=\"' . esc_url( $url ) . '\">' . esc_html( $label ) . '</a>';",
+              'tab url escaping',
+          )
+
+          replace_once(
+              "echo '<div class=\"notice notice-info\" style=\"margin:12px 0 0 0;\"><p>' . wp_kses_post( sprintf( __( 'Estos ajustes están controlados por la red. Gestiona los valores desde <a href=\"%s\">NO Comments (Network)</a>.', 'no-comments' ), $net_url ) ) . '</p></div>';",
+              "// translators: %s: URL to the network-level NO Comments settings page.\n                    echo '<div class=\"notice notice-info\" style=\"margin:12px 0 0 0;\"><p>' . wp_kses_post( sprintf( __( 'Estos ajustes están controlados por la red. Gestiona los valores desde <a href=\"%s\">NO Comments (Network)</a>.', 'no-comments' ), esc_url( $net_url ) ) ) . '</p></div>';",
+              'network notice translation/escaping',
+          )
+
+          replace_once(
+              "echo '<p style=\"color:#475569;\">' . wp_kses_post( sprintf(\n            __( 'Desarrollado por %1$s — <a href=\"%2$s\" target=\"_blank\">Web</a> · <a href=\"%3$s\" target=\"_blank\">X</a> · <a href=\"%4$s\" target=\"_blank\">Instagram</a>', 'no-comments' ),",
+              "// translators: 1: author/company name, 2: website URL, 3: X profile URL, 4: Instagram profile URL.\n        echo '<p style=\"color:#475569;\">' . wp_kses_post( sprintf(\n            __( 'Desarrollado por %1$s — <a href=\"%2$s\" target=\"_blank\">Web</a> · <a href=\"%3$s\" target=\"_blank\">X</a> · <a href=\"%4$s\" target=\"_blank\">Instagram</a>', 'no-comments' ),",
+              'branding translator comment',
+          )
+
+          replace_once(
+              "echo '<style id=\"no-comments-admin-css\">' . $css . '</style>';",
+              "// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- $css contains only plugin-defined selectors.\n            echo '<style id=\"no-comments-admin-css\">' . $css . '</style>';",
+              'hard-coded css explanation',
+          )
+
+          replace_once(
+              "$action_url = esc_url( admin_url( 'admin-post.php' ) );",
+              "$action_url = admin_url( 'admin-post.php' );",
+              'late escape action url',
+          )
+
+          replace_once(
+              "$selected_scope = isset( $_GET['scope'] ) ? sanitize_key( $_GET['scope'] ) : 'spam';\n        $pre_types = [];\n        if ( ! empty( $_GET['types'] ) ) {\n            $pre_types = array_filter( array_map( 'sanitize_key', array_map( 'trim', explode( ',', wp_unslash( $_GET['types'] ) ) ) ) );\n        }",
+              "$selected_scope = isset( $_GET['scope'] ) ? sanitize_key( wp_unslash( $_GET['scope'] ) ) : 'spam';\n        $pre_types      = [];\n        $types_query    = isset( $_GET['types'] ) ? sanitize_text_field( wp_unslash( $_GET['types'] ) ) : '';\n        if ( '' !== $types_query ) {\n            $pre_types = array_filter( array_map( 'sanitize_key', array_map( 'trim', explode( ',', $types_query ) ) ) );\n        }",
+              'query parameter sanitization',
+          )
+
+          replace_once(
+              "echo '<form method=\"post\" action=\"' . $action_url . '\">';",
+              "echo '<form method=\"post\" action=\"' . esc_url( $action_url ) . '\">';",
+              'delete form url escaping',
+          )
+
+          replace_once(
+              "foreach ( [ 'spam' => 'Spam', 'pending' => 'Pendientes', 'trash' => 'Papelera', 'all' => 'Todos' ] as $sc => $lab ) {\n            $pressed = $selected_scope === $sc ? 'true' : 'false';\n            echo '<button class=\"button\" data-scope=\"' . esc_attr( $sc ) . '\" aria-pressed=\"' . esc_attr( $pressed ) . '\">' . esc_html__( $lab, 'no-comments' ) . '</button>';\n        }",
+              "foreach (\n            [\n                'spam'    => __( 'Spam', 'no-comments' ),\n                'pending' => __( 'Pendientes', 'no-comments' ),\n                'trash'   => __( 'Papelera', 'no-comments' ),\n                'all'     => __( 'Todos', 'no-comments' ),\n            ] as $sc => $lab\n        ) {\n            $pressed = $selected_scope === $sc ? 'true' : 'false';\n            echo '<button class=\"button\" data-scope=\"' . esc_attr( $sc ) . '\" aria-pressed=\"' . esc_attr( $pressed ) . '\">' . esc_html( $lab ) . '</button>';\n        }",
+              'literal translations',
+          )
+
+          replace_once(
+              "$ck = in_array( $slug, $pre_types, true ) ? ' checked' : '';\n                echo '<input type=\"checkbox\" name=\"delete_types[]\" value=\"' . esc_attr( $slug ) . '\"' . $ck . '> ' . esc_html( $label );",
+              "$ck = checked( in_array( $slug, $pre_types, true ), true, false );\n                echo '<input type=\"checkbox\" name=\"delete_types[]\" value=\"' . esc_attr( $slug ) . '\" ' . $ck . '> ' . esc_html( $label ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- checked() returns a safe HTML attribute.",
+              'checkbox attribute escaping',
+          )
+
+          replace_once(
+              "$deleted  = intval( $_GET['deleted'] );\n            $scope    = sanitize_key( $_GET['scope'] );\n            $sim      = isset( $_GET['dry'] ) && '1' === $_GET['dry'];\n            $strategy = isset( $_GET['strategy'] ) ? sanitize_key( $_GET['strategy'] ) : '';\n            $types_q  = isset( $_GET['types'] ) ? sanitize_text_field( wp_unslash( $_GET['types'] ) ) : '';\n            $types_h  = $types_q ? esc_html( $types_q ) : esc_html__( 'todos', 'no-comments' );",
+              "$deleted  = absint( $_GET['deleted'] );\n            $scope    = sanitize_key( wp_unslash( $_GET['scope'] ) );\n            $sim      = isset( $_GET['dry'] ) && '1' === sanitize_key( wp_unslash( $_GET['dry'] ) );\n            $strategy = isset( $_GET['strategy'] ) ? sanitize_key( wp_unslash( $_GET['strategy'] ) ) : '';\n            $types_q  = isset( $_GET['types'] ) ? sanitize_text_field( wp_unslash( $_GET['types'] ) ) : '';\n            $types_h  = $types_q ? $types_q : __( 'todos', 'no-comments' );",
+              'result query sanitization',
+          )
+
+          replace_once(
+              "                $deleted,\n                esc_html__( 'alcance', 'no-comments' ), esc_html( $scope ),\n                esc_html__( 'tipos', 'no-comments' ), $types_h,",
+              "                absint( $deleted ),\n                esc_html__( 'alcance', 'no-comments' ), esc_html( $scope ),\n                esc_html__( 'tipos', 'no-comments' ), esc_html( $types_h ),",
+              'result output escaping',
+          )
+
+          replace_once(
+              "$scope   = isset( $_POST['delete_scope'] ) ? sanitize_key( $_POST['delete_scope'] ) : 'spam';\n        $confirm = isset( $_POST['confirm'] ) ? trim( wp_unslash( $_POST['confirm'] ) ) : '';\n        $dry_run = ! empty( $_POST['dry_run'] );\n        $strategy = isset( $_POST['delete_strategy'] ) && 'trash' === sanitize_key( $_POST['delete_strategy'] ) ? 'trash' : 'delete';\n        $types   = [];\n        if ( ! empty( $_POST['delete_types'] ) && is_array( $_POST['delete_types'] ) ) {\n            foreach ( $_POST['delete_types'] as $t ) {\n                $types[] = sanitize_key( $t );\n            }\n            $types = array_values( array_unique( array_filter( $types ) ) );\n        }",
+              "$scope    = isset( $_POST['delete_scope'] ) ? sanitize_key( wp_unslash( $_POST['delete_scope'] ) ) : 'spam';\n        $confirm  = isset( $_POST['confirm'] ) ? sanitize_text_field( wp_unslash( $_POST['confirm'] ) ) : '';\n        $dry_run  = ! empty( $_POST['dry_run'] );\n        $strategy = isset( $_POST['delete_strategy'] ) && 'trash' === sanitize_key( wp_unslash( $_POST['delete_strategy'] ) ) ? 'trash' : 'delete';\n        $types    = [];\n        $raw_types = isset( $_POST['delete_types'] ) && is_array( $_POST['delete_types'] ) ? wp_unslash( $_POST['delete_types'] ) : [];\n        foreach ( $raw_types as $t ) {\n            $types[] = sanitize_key( $t );\n        }\n        $types = array_values( array_unique( array_filter( $types ) ) );",
+              'delete POST sanitization',
+          )
+
+          replace_once(
+              "$action = esc_url( admin_url( 'admin-post.php' ) );\n        echo '<form method=\"post\" action=\"' . $action . '\">';",
+              "$action = admin_url( 'admin-post.php' );\n        echo '<form method=\"post\" action=\"' . esc_url( $action ) . '\">';",
+              'network action late escaping',
+          )
+
+          path.write_text(text)
+          PY
+
+          php -l no-comments/no-comments.php
+          git diff --check
+
+      - name: Commit patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add no-comments/no-comments.php
+          git commit -m "Harden admin input and output handling [security-bot]"
+          git push origin HEAD:agent/public-release-hardening
