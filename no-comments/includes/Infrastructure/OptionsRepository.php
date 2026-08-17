@@ -106,6 +106,65 @@ class OptionsRepository {
 	}
 
 	/**
+	 * Impide que rutas alternativas de escritura dejen valores locales ocultos
+	 * mientras Multisite está en modo enforce.
+	 *
+	 * La UI y REST ya presentan esos ajustes como controlados por la red. Este
+	 * filtro extiende la misma regla a options.php, imports directos y WP-CLI.
+	 *
+	 * @param mixed  $value     Valor nuevo.
+	 * @param mixed  $old_value Valor actual.
+	 * @param string $option    Nombre de opción.
+	 * @return mixed
+	 */
+	public static function guard_enforced_site_option( $value, $old_value, $option ) {
+		if ( ! self::is_enforced() ) {
+			return $value;
+		}
+
+		if ( defined( 'WP_CLI' ) && WP_CLI && class_exists( 'WP_CLI' ) ) {
+			\WP_CLI::error(
+				sprintf(
+					/* translators: %s: WordPress option name. */
+					__( 'La red controla los ajustes de NO Comments; no se puede modificar %s a nivel de sitio.', 'no-comments' ),
+					$option
+				)
+			);
+		}
+
+		return $old_value;
+	}
+
+	/**
+	 * Normaliza la opción de excepciones antes de persistirla.
+	 *
+	 * Cuando la compatibilidad WooCommerce está activa, `product` ya es una
+	 * excepción efectiva automática. No lo persistimos además en la lista raw;
+	 * así un export/import no convierte accidentalmente esa excepción dinámica
+	 * en permanente cuando luego se apaga la compatibilidad WooCommerce.
+	 *
+	 * @param mixed  $value     Valor nuevo.
+	 * @param mixed  $old_value Valor actual.
+	 * @param string $option    Nombre de opción.
+	 * @return array
+	 */
+	public static function normalize_exception_option( $value, $old_value, $option ) {
+		$guarded = self::guard_enforced_site_option( $value, $old_value, $option );
+		if ( $guarded === $old_value && self::is_enforced() ) {
+			return is_array( $old_value ) ? $old_value : array();
+		}
+
+		$types = is_array( $guarded ) ? $guarded : array();
+		$types = array_values( array_unique( array_filter( array_map( 'sanitize_key', $types ) ) ) );
+
+		if ( self::effective_keep_woo_reviews() ) {
+			$types = array_values( array_diff( $types, array( 'product' ) ) );
+		}
+
+		return $types;
+	}
+
+	/**
 	 * Restringe consultas agregadas de comentarios a los post types exceptuados.
 	 *
 	 * El short-circuit del plugin evita consultas cuando el bloqueo global está
@@ -190,3 +249,18 @@ class OptionsRepository {
 add_action( 'admin_post_no_comments_network_save', array( OptionsRepository::class, 'normalize_network_form_post' ), 0 );
 add_action( 'parse_comment_query', array( OptionsRepository::class, 'scope_exception_comment_query' ), 9 );
 add_filter( 'comments_pre_query', array( OptionsRepository::class, 'restore_scoped_exception_query' ), 11, 2 );
+
+foreach (
+	array(
+		'no_comments_enabled',
+		'no_comments_disable_rest',
+		'no_comments_disable_xmlrpc',
+		'no_comments_keep_woo_reviews',
+		'no_comments_auto_close_days',
+		'no_comments_auto_cleanup',
+		'no_comments_auto_cleanup_interval',
+	) as $no_comments_site_option
+) {
+	add_filter( 'pre_update_option_' . $no_comments_site_option, array( OptionsRepository::class, 'guard_enforced_site_option' ), 10, 3 );
+}
+add_filter( 'pre_update_option_no_comments_exceptions', array( OptionsRepository::class, 'normalize_exception_option' ), 10, 3 );
