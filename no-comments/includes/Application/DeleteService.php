@@ -42,11 +42,24 @@ class DeleteService {
 			$ids     = get_comments( $args );
 			$changed = 0;
 			$status  = isset( $args['status'] ) ? $args['status'] : 'all';
-			$force   = ( 'delete' === $strategy ) || ( 'trash' === $status );
 
 			foreach ( $ids as $comment_id ) {
 				$post_id = (int) get_comment_post_ID( $comment_id );
-				if ( wp_delete_comment( $comment_id, $force ) ) {
+
+				if ( 'trash' === $strategy && 'trash' !== $status ) {
+					// If WordPress Trash is disabled, wp_trash_comment() permanently
+					// deletes the comment. Refuse the mutation instead of violating the
+					// reversible strategy promised by the UI/API.
+					if ( ! defined( 'EMPTY_TRASH_DAYS' ) || EMPTY_TRASH_DAYS <= 0 ) {
+						return 0;
+					}
+					$result = wp_trash_comment( $comment_id );
+				} else {
+					// Permanent cleanup, including an explicit Trash scope.
+					$result = wp_delete_comment( $comment_id, true );
+				}
+
+				if ( $result ) {
 					++$deleted;
 					++$changed;
 					if ( $post_id ) {
@@ -115,9 +128,9 @@ class DeleteService {
 	 * plugin de caché pueda reaccionar, e integra Tucho (hook `tucho_purge_post`)
 	 * cuando está activo.
 	 *
-	 * @param int[]   $post_ids IDs de posts afectados (sin duplicados).
-	 * @param string  $scope    Alcance ejecutado.
-	 * @param string  $strategy Estrategia ejecutada.
+	 * @param int[]  $post_ids IDs de posts afectados (sin duplicados).
+	 * @param string $scope    Alcance ejecutado.
+	 * @param string $strategy Estrategia ejecutada.
 	 */
 	private static function purge_affected_posts( array $post_ids, $scope, $strategy ) {
 		$post_ids = array_values( array_unique( array_filter( array_map( 'absint', $post_ids ) ) ) );
