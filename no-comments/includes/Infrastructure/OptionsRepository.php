@@ -97,9 +97,9 @@ class OptionsRepository {
 				continue;
 			}
 
-			// phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Exact scalar comparison; nonce is verified by the main handler.
-			$value = $_POST[ $key ];
-			if ( ! is_scalar( $value ) || '1' !== (string) wp_unslash( $value ) ) {
+			// phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Nonce is verified by the main handler; an exact allowlist comparison follows.
+			$value = wp_unslash( $_POST[ $key ] );
+			if ( ! is_scalar( $value ) || '1' !== (string) $value ) {
 				unset( $_POST[ $key ] );
 			}
 		}
