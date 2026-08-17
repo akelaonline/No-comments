@@ -38,6 +38,9 @@ jobs:
       - name: PHP syntax check
         run: find no-comments -type f -name '*.php' -print0 | xargs -0 -n1 php -l
 
+      - name: Audit regression checks
+        run: php dev/tests/regression.php
+
       - name: PHP coding, security and i18n checks
         run: vendor/bin/phpcs --report=full
 
