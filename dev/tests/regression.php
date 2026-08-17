@@ -21,9 +21,9 @@ class No_Comments_Plugin {
 
 class WooCommerce {}
 
-$GLOBALS['nc_test_options'] = array();
-$GLOBALS['nc_test_network'] = array();
-$GLOBALS['nc_test_comments'] = array();
+$GLOBALS['nc_test_options']   = array();
+$GLOBALS['nc_test_network']   = array();
+$GLOBALS['nc_test_comments']  = array();
 $GLOBALS['nc_test_multisite'] = false;
 
 function is_multisite() {
@@ -193,5 +193,50 @@ nc_assert( array( 'page', 'product' ) === $query->query_vars['post_type'], 'Aggr
 nc_assert( ! empty( $query->query_vars['_no_comments_exception_scope'] ), 'Aggregate exception query is marked for restoration' );
 $result = \NoComments\Infrastructure\OptionsRepository::restore_scoped_exception_query( array(), $query );
 nc_assert( null === $result, 'Exception query restores normal WordPress querying after the blocker short-circuit' );
+
+// 4. WooCommerce product is an effective exception, not a redundant raw one.
+$GLOBALS['nc_test_multisite'] = false;
+$GLOBALS['nc_test_options']   = array(
+	No_Comments_Plugin::OPTION_WOO => 1,
+);
+$exceptions = \NoComments\Infrastructure\OptionsRepository::normalize_exception_option(
+	array( 'page', 'product', 'PAGE', '' ),
+	array(),
+	No_Comments_Plugin::OPTION_EXCEPTIONS
+);
+nc_assert( array( 'page' ) === $exceptions, 'Woo compatibility prevents product from becoming a permanent raw exception' );
+
+$GLOBALS['nc_test_options'][ No_Comments_Plugin::OPTION_WOO ] = 0;
+$exceptions = \NoComments\Infrastructure\OptionsRepository::normalize_exception_option(
+	array( 'page', 'product' ),
+	array(),
+	No_Comments_Plugin::OPTION_EXCEPTIONS
+);
+nc_assert( array( 'page', 'product' ) === $exceptions, 'Product can still be an explicit exception when Woo compatibility is off' );
+
+// 5. Multisite enforcement blocks shadow site-option writes from alternate paths.
+$GLOBALS['nc_test_multisite'] = true;
+$GLOBALS['nc_test_network']   = array(
+	No_Comments_Plugin::OPTION_NETWORK => array(
+		'enforce' => 1,
+		'enabled' => 1,
+		'rest'    => 1,
+		'xmlrpc'  => 1,
+		'woo'     => 0,
+	),
+);
+$guarded = \NoComments\Infrastructure\OptionsRepository::guard_enforced_site_option(
+	0,
+	1,
+	No_Comments_Plugin::OPTION_KEY
+);
+nc_assert( 1 === $guarded, 'Network enforcement preserves the existing site option instead of writing a shadow value' );
+
+$guarded_exceptions = \NoComments\Infrastructure\OptionsRepository::normalize_exception_option(
+	array( 'post' ),
+	array( 'page' ),
+	No_Comments_Plugin::OPTION_EXCEPTIONS
+);
+nc_assert( array( 'page' ) === $guarded_exceptions, 'Network enforcement blocks exception changes through imports or alternate write paths' );
 
 echo "All NO Comments regression checks passed.\n";
