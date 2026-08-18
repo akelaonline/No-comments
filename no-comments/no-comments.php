@@ -5,9 +5,9 @@
  * Version: 1.14.0
  * Requires at least: 6.0
  * Requires PHP: 7.4
- * Author: Akela (@akelaonline)
+ * Author: Alejandro Daniel José · Akela
  * Plugin URI: https://github.com/akelaonline/No-comments
- * Author URI: https://www.instagram.com/akelaonline/
+ * Author URI: https://mktmarketingdigital.com
  * License: GPLv2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Update URI: https://github.com/akelaonline/No-comments
@@ -38,1955 +38,387 @@ final class No_Comments_Plugin {
     const OPTION_KEY     = 'no_comments_enabled';
     const SETTINGS_GROUP = 'no_comments_settings_group';
     const PAGE_SLUG      = 'no-comments';
-    const OPTION_REST    = 'no_comments_disable_rest';
-    const OPTION_XMLRPC  = 'no_comments_disable_xmlrpc';
-    const OPTION_WOO     = 'no_comments_keep_woo_reviews';
-    const OPTION_NETWORK = 'no_comments_network_settings';
 
-    // Opciones v1.13.0
-    const OPTION_EXCEPTIONS       = 'no_comments_exceptions';
-    const OPTION_AUTO_CLOSE_DAYS  = 'no_comments_auto_close_days';
-    const OPTION_AUTO_CLEANUP     = 'no_comments_auto_cleanup';
-    const OPTION_AUTO_CLEANUP_INT = 'no_comments_auto_cleanup_interval';
-    const OPTION_LAST_CLEANUP     = 'no_comments_last_cleanup';
-    const CRON_EVENT              = 'no_comments_auto_cleanup';
-    const CRON_LOCK               = 'no_comments_cleanup_lock';
-
-    /**
-     * Inicio del plugin.
-     */
-    public static function init() {
-        // Textdomain
-        add_action( 'plugins_loaded', [ __CLASS__, 'load_textdomain' ] );
-
-        // Ajustes y página en el admin
-        add_action( 'admin_init', [ __CLASS__, 'register_settings' ] );
-        add_action( 'admin_menu', [ __CLASS__, 'add_settings_page' ] );
-        add_action( 'admin_menu', [ __CLASS__, 'reorder_settings_submenu' ], 1000 );
-
-        // Multisite: página de ajustes de red
-        if ( is_multisite() ) {
-            add_action( 'network_admin_menu', [ __CLASS__, 'add_network_settings_page' ] );
-        }
-
-        // Estilos propios en la página del plugin
-        add_action( 'admin_enqueue_scripts', [ __CLASS__, 'enqueue_admin_assets' ] );
-
-        // Site Health
-        add_filter( 'site_status_tests', [ __CLASS__, 'register_site_health_tests' ] );
-
-        // Acciones admin para borrar comentarios
-        add_action( 'admin_post_no_comments_delete', [ __CLASS__, 'handle_delete_request' ] );
-
-        // Exportar / importar ajustes
-        add_action( 'admin_post_no_comments_export', [ __CLASS__, 'handle_export_request' ] );
-        add_action( 'admin_post_no_comments_import', [ __CLASS__, 'handle_import_request' ] );
-
-        // Guardado de ajustes de red
-        add_action( 'admin_post_no_comments_network_save', [ __CLASS__, 'handle_network_save' ] );
-
-        // REST API
-        add_action( 'rest_api_init', [ __CLASS__, 'register_rest_routes' ] );
-
-        // Admin bar: toggle rápido
-        add_action( 'admin_bar_menu', [ __CLASS__, 'admin_bar_toggle_node' ], 90 );
-
-        // Admin-post: manejar toggle rápido
-        add_action( 'admin_post_no_comments_toggle', [ __CLASS__, 'handle_toggle_request' ] );
-
-        // Enlace de Ajustes en la fila del plugin
-        add_filter( 'plugin_action_links_' . plugin_basename( __FILE__ ), [ __CLASS__, 'plugin_action_links' ] );
-        // Enlaces extra en la fila del plugin (branding)
-        add_filter( 'plugin_row_meta', [ __CLASS__, 'plugin_row_meta' ], 10, 2 );
-
-        // Filtros compartidos: se registran siempre y cada método decide según
-        // el estado efectivo (bloqueo global y/o cierre por antigüedad).
-        add_filter( 'comments_open', [ __CLASS__, 'filter_comments_open' ], 20, 2 );
-        add_filter( 'pings_open', [ __CLASS__, 'filter_pings_open' ], 20, 2 );
-        add_filter( 'comments_array', [ __CLASS__, 'filter_comments_array' ], 10, 2 );
-        add_filter( 'comments_pre_query', [ __CLASS__, 'filter_comments_pre_query' ], 10, 2 );
-        add_filter( 'pre_comment_approved', [ __CLASS__, 'filter_pre_comment_approved' ], 10, 2 );
-
-        // Limpieza automática por WP-Cron (intervalo semanal propio).
-        add_filter( 'cron_schedules', [ __CLASS__, 'register_cron_schedules' ] );
-        add_action( self::CRON_EVENT, [ __CLASS__, 'run_cleanup' ] );
-        self::maybe_schedule_cleanup();
-
-        // Hardening completo cuando el bloqueo global está activo.
-        if ( self::is_enabled() ) {
-            self::apply_disable_comments();
-        }
+    public function __construct() {
+        // Note: disabled by default; admins can enable from Settings > NO Comments.
+        add_action( 'admin_init', array( $this, 'register_settings' ) );
+        add_action( 'admin_menu', array( $this, 'admin_menu' ) );
+        add_action( 'admin_init', array( $this, 'maybe_apply_admin_policy' ), 1 );
+        add_action( 'init', array( $this, 'maybe_apply_frontend_policy' ), 1 );
+        add_action( 'wp_loaded', array( $this, 'maybe_apply_cleanup_schedule' ) );
+        add_action( 'no_comments_cleanup_event', array( $this, 'run_scheduled_cleanup' ) );
+        add_action( 'rest_api_init', array( $this, 'register_rest_routes' ) );
     }
 
-    /** Registra el intervalo semanal para WP-Cron. */
-    public static function register_cron_schedules( $schedules ) {
-        if ( ! isset( $schedules['weekly'] ) ) {
-            $schedules['weekly'] = [
-                'interval' => WEEK_IN_SECONDS,
-                'display'  => __( 'Semanal', 'no-comments' ),
-            ];
-        }
-        return $schedules;
+    public function is_enabled() {
+        return (bool) get_option( self::OPTION_KEY, false );
     }
 
-    /** Limpieza automática activa. */
-    public static function auto_cleanup_enabled() {
-        return (bool) get_option( self::OPTION_AUTO_CLEANUP, 0 );
+    public function get_settings() {
+        return array(
+            'enabled'              => $this->is_enabled(),
+            'rest_api'             => (bool) get_option( 'no_comments_disable_rest_api', false ),
+            'xmlrpc'               => (bool) get_option( 'no_comments_disable_xmlrpc', false ),
+            'keep_wc_reviews'      => (bool) get_option( 'no_comments_keep_wc_reviews', true ),
+            'exceptions'           => (array) get_option( 'no_comments_post_type_exceptions', array() ),
+            'auto_close_days'      => max( 0, (int) get_option( 'no_comments_auto_close_days', 0 ) ),
+            'cleanup_enabled'      => (bool) get_option( 'no_comments_cleanup_enabled', false ),
+            'cleanup_interval'     => (string) get_option( 'no_comments_cleanup_interval', 'daily' ),
+            'cleanup_scope'        => (string) get_option( 'no_comments_cleanup_scope', 'spam' ),
+            'cleanup_strategy'     => (string) get_option( 'no_comments_cleanup_strategy', 'delete' ),
+            'cleanup_post_types'   => (array) get_option( 'no_comments_cleanup_post_types', array() ),
+        );
     }
 
-    /** Intervalo de limpieza automática (daily|twicedaily|weekly). */
-    public static function auto_cleanup_interval() {
-        $interval = get_option( self::OPTION_AUTO_CLEANUP_INT, 'daily' );
-        return in_array( $interval, [ 'daily', 'twicedaily', 'weekly' ], true ) ? $interval : 'daily';
-    }
-
-    /**
-     * Mantiene el evento de WP-Cron alineado con la configuración
-     * (agenda/desagenda y resuelve cambios de intervalo).
-     */
-    public static function maybe_schedule_cleanup() {
-        $event    = self::CRON_EVENT;
-        $next     = wp_next_scheduled( $event );
-        $enabled  = self::auto_cleanup_enabled();
-        $interval = self::auto_cleanup_interval();
-
-        if ( ! $enabled ) {
-            if ( $next ) {
-                wp_unschedule_event( $next, $event );
-            }
-            return;
-        }
-
-        $scheduled_interval = $next ? (string) wp_get_schedule( $event ) : '';
-        if ( ! $next || $scheduled_interval !== $interval ) {
-            if ( $next ) {
-                wp_unschedule_event( $next, $event );
-            }
-            wp_schedule_event( time() + MINUTE_IN_SECONDS, $interval, $event );
-        }
-    }
-
-    /**
-     * Ejecuta la limpieza automática de spam. Protegida con lock para evitar
-     * ejecuciones concurrentes (cron + CLI).
-     *
-     * @return int Comentarios eliminados (0 si otra ejecución estaba activa).
-     */
-    public static function run_cleanup() {
-        if ( get_transient( self::CRON_LOCK ) ) {
-            return 0;
-        }
-        set_transient( self::CRON_LOCK, 1, 10 * MINUTE_IN_SECONDS );
-
-        $deleted = self::delete_comments( 'spam', [], 'delete' );
-
-        update_option( self::OPTION_LAST_CLEANUP, [
-            'time'    => gmdate( 'c' ),
-            'deleted' => $deleted,
-        ] );
-        delete_transient( self::CRON_LOCK );
-
-        return $deleted;
-    }
-
-    /** Carga de i18n */
-    public static function load_textdomain() {
-        load_plugin_textdomain( 'no-comments', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );
-    }
-
-    /** Devuelve si el bloqueo global está activo (respeta enforcement de red) */
-    public static function is_enabled() {
-        if ( class_exists( '\\NoComments\\Infrastructure\\OptionsRepository' ) ) {
-            return \NoComments\Infrastructure\OptionsRepository::effective_enabled();
-        }
-        return (bool) get_option( self::OPTION_KEY, 0 );
-    }
-
-    /** Registra ajustes */
-    public static function register_settings() {
+    public function register_settings() {
         register_setting(
             self::SETTINGS_GROUP,
             self::OPTION_KEY,
-            [
+            array(
                 'type'              => 'boolean',
-                'sanitize_callback' => function ( $value ) { return $value ? 1 : 0; },
-                'default'           => 0,
-            ]
+                'sanitize_callback' => 'rest_sanitize_boolean',
+                'default'           => false,
+            )
         );
 
-        // Toggles avanzados
-        register_setting(
-            self::SETTINGS_GROUP,
-            self::OPTION_REST,
-            [
-                'type'              => 'boolean',
-                'sanitize_callback' => function ( $value ) { return $value ? 1 : 0; },
-                'default'           => 1, // por defecto cortamos REST de comentarios
-            ]
+        $boolean_options = array(
+            'no_comments_disable_rest_api' => false,
+            'no_comments_disable_xmlrpc'   => false,
+            'no_comments_keep_wc_reviews'  => true,
+            'no_comments_cleanup_enabled'  => false,
         );
 
-        register_setting(
-            self::SETTINGS_GROUP,
-            self::OPTION_XMLRPC,
-            [
-                'type'              => 'boolean',
-                'sanitize_callback' => function ( $value ) { return $value ? 1 : 0; },
-                'default'           => 1, // por defecto bloqueamos xmlrpc newComment
-            ]
-        );
-
-        // Compatibilidad
-        register_setting(
-            self::SETTINGS_GROUP,
-            self::OPTION_WOO,
-            [
-                'type'              => 'boolean',
-                'sanitize_callback' => function ( $value ) { return $value ? 1 : 0; },
-                'default'           => 0, // por defecto NO se mantienen reseñas
-            ]
-        );
-
-        add_settings_section(
-            'no_comments_main',
-            __( 'Ajustes', 'no-comments' ),
-            function () {
-                echo '<p>' . esc_html__( 'Activa o desactiva los comentarios (y pings) en todo el sitio.', 'no-comments' ) . '</p>';
-            },
-            self::PAGE_SLUG
-        );
-
-        add_settings_field(
-            self::OPTION_KEY,
-            __( 'Deshabilitar comentarios', 'no-comments' ),
-            [ __CLASS__, 'render_toggle_field' ],
-            self::PAGE_SLUG,
-            'no_comments_main'
-        );
-
-        add_settings_field(
-            self::OPTION_REST,
-            __( 'APIs', 'no-comments' ),
-            [ __CLASS__, 'render_api_toggles_field' ],
-            self::PAGE_SLUG,
-            'no_comments_main'
-        );
-
-        add_settings_field(
-            self::OPTION_WOO,
-            __( 'Compatibilidad', 'no-comments' ),
-            [ __CLASS__, 'render_compat_field' ],
-            self::PAGE_SLUG,
-            'no_comments_main'
-        );
-
-        // Excepciones por tipo de contenido (v1.13.0)
-        register_setting(
-            self::SETTINGS_GROUP,
-            self::OPTION_EXCEPTIONS,
-            [
-                'type'              => 'array',
-                'sanitize_callback' => function ( $value ) {
-                    if ( ! is_array( $value ) ) {
-                        return [];
-                    }
-                    return array_values( array_unique( array_filter( array_map( 'sanitize_key', $value ) ) ) );
-                },
-                'default'           => [],
-            ]
-        );
-
-        add_settings_field(
-            self::OPTION_EXCEPTIONS,
-            __( 'Excepciones', 'no-comments' ),
-            [ __CLASS__, 'render_exceptions_field' ],
-            self::PAGE_SLUG,
-            'no_comments_main'
-        );
-
-        // Cierre automático por antigüedad (v1.13.0)
-        register_setting(
-            self::SETTINGS_GROUP,
-            self::OPTION_AUTO_CLOSE_DAYS,
-            [
-                'type'              => 'integer',
-                'sanitize_callback' => function ( $value ) { return max( 0, (int) $value ); },
-                'default'           => 0,
-            ]
-        );
-
-        add_settings_field(
-            self::OPTION_AUTO_CLOSE_DAYS,
-            __( 'Cierre automático', 'no-comments' ),
-            [ __CLASS__, 'render_auto_close_field' ],
-            self::PAGE_SLUG,
-            'no_comments_main'
-        );
-
-        // Limpieza automática por WP-Cron (v1.13.0)
-        register_setting(
-            self::SETTINGS_GROUP,
-            self::OPTION_AUTO_CLEANUP,
-            [
-                'type'              => 'boolean',
-                'sanitize_callback' => function ( $value ) { return $value ? 1 : 0; },
-                'default'           => 0,
-            ]
-        );
-        register_setting(
-            self::SETTINGS_GROUP,
-            self::OPTION_AUTO_CLEANUP_INT,
-            [
-                'type'              => 'string',
-                'sanitize_callback' => function ( $value ) {
-                    return in_array( $value, [ 'daily', 'twicedaily', 'weekly' ], true ) ? $value : 'daily';
-                },
-                'default'           => 'daily',
-            ]
-        );
-
-        add_settings_field(
-            self::OPTION_AUTO_CLEANUP,
-            __( 'Limpieza automática', 'no-comments' ),
-            [ __CLASS__, 'render_cleanup_field' ],
-            self::PAGE_SLUG,
-            'no_comments_main'
-        );
-    }
-
-    /** Render del checkbox */
-    public static function render_toggle_field() {
-        $enabled = self::is_enabled();
-        echo '<input type="hidden" name="' . esc_attr( self::OPTION_KEY ) . '" value="0" />';
-        echo '<label>';
-        echo '<input type="checkbox" name="' . esc_attr( self::OPTION_KEY ) . '" value="1" ' . checked( $enabled, true, false ) . ' /> ';
-        echo esc_html__( 'Cerrar comentarios y pings en todo el sitio', 'no-comments' );
-        echo '</label>';
-    }
-
-    /** Render de toggles de API (REST y XML-RPC) */
-    public static function render_api_toggles_field() {
-        $rest   = (bool) get_option( self::OPTION_REST, 1 );
-        $xmlrpc = (bool) get_option( self::OPTION_XMLRPC, 1 );
-        echo '<p>' . esc_html__( 'Cuando el bloqueo esté activo, además puedes cortar los puntos de entrada de API:', 'no-comments' ) . '</p>';
-        echo '<label style="display:block;margin:4px 0;" title="' . esc_attr__( 'Quita el endpoint REST de comentarios para reducir superficie de ataque o integraciones no deseadas.', 'no-comments' ) . '">';
-        echo '<input type="hidden" name="' . esc_attr( self::OPTION_REST ) . '" value="0" />';
-        echo '<input type="checkbox" name="' . esc_attr( self::OPTION_REST ) . '" value="1" ' . checked( $rest, true, false ) . ' /> ' . esc_html__( 'Deshabilitar endpoint REST de comentarios (wp/v2/comments)', 'no-comments' );
-        echo '</label>';
-        echo '<label style="display:block;margin:4px 0;" title="' . esc_attr__( 'Bloquea la creación de comentarios vía XML‑RPC (método wp.newComment).', 'no-comments' ) . '">';
-        echo '<input type="hidden" name="' . esc_attr( self::OPTION_XMLRPC ) . '" value="0" />';
-        echo '<input type="checkbox" name="' . esc_attr( self::OPTION_XMLRPC ) . '" value="1" ' . checked( $xmlrpc, true, false ) . ' /> ' . esc_html__( 'Deshabilitar XML‑RPC (método wp.newComment)', 'no-comments' );
-        echo '</label>';
-        echo '<p class="description">' . esc_html__( 'Recomendado mantenerlos activos (marcados) para mayor seguridad.', 'no-comments' ) . '</p>';
-    }
-
-    /** Render de compatibilidad */
-    public static function render_compat_field() {
-        $keep_reviews  = (bool) get_option( self::OPTION_WOO, 0 );
-        $woo_is_active = class_exists( 'WooCommerce' );
-        echo '<p>' . esc_html__( 'Opciones de compatibilidad con plugins de terceros.', 'no-comments' ) . '</p>';
-        echo '<label style="display:block;margin:4px 0;">';
-        echo '<input type="hidden" name="' . esc_attr( self::OPTION_WOO ) . '" value="0" />';
-        echo '<input type="checkbox" name="' . esc_attr( self::OPTION_WOO ) . '" value="1" ' . checked( $keep_reviews, true, false ) . ' /> ' . esc_html__( 'Mantener reseñas de productos (WooCommerce)', 'no-comments' );
-        echo '</label>';
-        if ( ! $woo_is_active ) {
-            echo '<p class="description">' . esc_html__( 'WooCommerce no está activo. Puedes dejar esta opción preparada y tendrá efecto cuando WooCommerce se active.', 'no-comments' ) . '</p>';
-        }
-    }
-
-    /** Render: excepciones por tipo de contenido */
-    public static function render_exceptions_field() {
-        $current = get_option( self::OPTION_EXCEPTIONS, [] );
-        if ( ! is_array( $current ) ) {
-            $current = [];
-        }
-        $types = get_post_types( [ 'public' => true ], 'objects' );
-        if ( empty( $types ) ) {
-            echo '<p class="description">' . esc_html__( 'No hay tipos de contenido públicos registrados.', 'no-comments' ) . '</p>';
-            return;
-        }
-        echo '<p>' . esc_html__( 'Estos tipos de contenido conservan comentarios y pings aunque el bloqueo global esté activo:', 'no-comments' ) . '</p>';
-        echo '<input type="hidden" name="' . esc_attr( self::OPTION_EXCEPTIONS ) . '[]" value="" />';
-        foreach ( $types as $slug => $obj ) {
-            $label = isset( $obj->labels->singular_name ) ? $obj->labels->singular_name : $slug;
-            $checked = checked( in_array( $slug, $current, true ), true, false );
-            echo '<label style="display:inline-block;margin:2px 12px 2px 0;">';
-            // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- checked() returns a safe HTML attribute.
-            echo '<input type="checkbox" name="' . esc_attr( self::OPTION_EXCEPTIONS ) . '[]" value="' . esc_attr( $slug ) . '" ' . $checked . ' /> ' . esc_html( $label );
-            echo '</label>';
-        }
-        if ( self::keep_woo_reviews() ) {
-            echo '<p class="description">' . esc_html__( 'WooCommerce está activo con reseñas: "product" se mantiene como excepción automáticamente.', 'no-comments' ) . '</p>';
-        }
-    }
-
-    /** Render: cierre automático por antigüedad */
-    public static function render_auto_close_field() {
-        $days = self::auto_close_days();
-        echo '<label>';
-        echo '<input type="number" name="' . esc_attr( self::OPTION_AUTO_CLOSE_DAYS ) . '" value="' . esc_attr( (string) $days ) . '" min="0" step="1" style="width:100px;" /> ';
-        echo esc_html__( 'días', 'no-comments' );
-        echo '</label>';
-        echo '<p class="description">' . esc_html__( 'Cierra formularios y pings en contenido con más de N días de antigüedad, sin desactivar el bloqueo del sitio. Aplica cuando el bloqueo global está apagado. 0 = desactivado.', 'no-comments' ) . '</p>';
-    }
-
-    /** Render: limpieza automática de spam */
-    public static function render_cleanup_field() {
-        $enabled  = self::auto_cleanup_enabled();
-        $interval = self::auto_cleanup_interval();
-        echo '<label style="display:block;margin:4px 0;">';
-        echo '<input type="hidden" name="' . esc_attr( self::OPTION_AUTO_CLEANUP ) . '" value="0" />';
-        echo '<input type="checkbox" name="' . esc_attr( self::OPTION_AUTO_CLEANUP ) . '" value="1" ' . checked( $enabled, true, false ) . ' /> ';
-        echo esc_html__( 'Borrar spam automáticamente (WP-Cron)', 'no-comments' );
-        echo '</label>';
-        echo '<label style="display:block;margin:4px 0;">' . esc_html__( 'Frecuencia:', 'no-comments' ) . ' ';
-        echo '<select name="' . esc_attr( self::OPTION_AUTO_CLEANUP_INT ) . '">';
-        foreach ( [ 'daily' => __( 'Diaria', 'no-comments' ), 'twicedaily' => __( 'Dos veces al día', 'no-comments' ), 'weekly' => __( 'Semanal', 'no-comments' ) ] as $value => $label ) {
-            echo '<option value="' . esc_attr( $value ) . '" ' . selected( $interval, $value, false ) . '>' . esc_html( $label ) . '</option>';
-        }
-        echo '</select></label>';
-        $last = get_option( self::OPTION_LAST_CLEANUP, [] );
-        if ( is_array( $last ) && ! empty( $last['time'] ) ) {
-            echo '<p class="description">' . sprintf(
-                /* translators: 1: date of the last cleanup, 2: number of deleted comments. */
-                esc_html__( 'Última limpieza: %1$s — %2$d comentarios eliminados.', 'no-comments' ),
-                esc_html( (string) $last['time'] ),
-                (int) $last['deleted']
-            ) . '</p>';
-        } else {
-            echo '<p class="description">' . esc_html__( 'El borrado usa alcance Spam y borrado definitivo. Se registra la fecha y cantidad de cada ejecución.', 'no-comments' ) . '</p>';
-        }
-    }
-
-    /** Página de ajustes */
-    public static function add_settings_page() {
-        add_options_page(
-            __( 'NO Comments', 'no-comments' ),
-            __( 'NO Comments', 'no-comments' ),
-            'manage_options',
-            self::PAGE_SLUG,
-            [ __CLASS__, 'render_settings_page' ]
-        );
-    }
-
-    /** Render de la página (con tabs Disable / Delete) */
-    public static function render_settings_page() {
-        if ( ! current_user_can( 'manage_options' ) ) {
-            return;
-        }
-        $active_tab = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : 'disable';
-
-        echo '<div class="wrap" id="no-comments-admin">';
-        echo '<div class="nc-head">';
-        echo '<h1>' . esc_html__( 'NO Comments', 'no-comments' ) . '</h1>';
-        echo '<span class="nc-version">v' . esc_html( NO_COMMENTS_VERSION ) . '</span>';
-        echo '</div>';
-
-        // Help tab
-        if ( function_exists( 'get_current_screen' ) ) {
-            $screen = get_current_screen();
-            if ( $screen && method_exists( $screen, 'add_help_tab' ) ) {
-                $screen->add_help_tab( [
-                    'id'      => 'no-comments-help',
-                    'title'   => __( 'Ayuda', 'no-comments' ),
-                    'content' => '<p>' . esc_html__( 'Usa "Disable Comments" para cerrar comentarios globalmente. En "Delete Comments" puedes simular (dry‑run) o ejecutar limpieza por alcance.', 'no-comments' ) . '</p>',
-                ] );
-            }
-        }
-
-        echo '<h2 class="nav-tab-wrapper">';
-        $tabs = [
-            'disable' => __( 'Disable Comments', 'no-comments' ),
-            'delete'  => __( 'Delete Comments', 'no-comments' ),
-        ];
-        foreach ( $tabs as $tab => $label ) {
-            $class = ( $active_tab === $tab ) ? ' nav-tab nav-tab-active' : ' nav-tab';
-            $url   = esc_url( add_query_arg( [ 'page' => self::PAGE_SLUG, 'tab' => $tab ], admin_url( 'options-general.php' ) ) );
-            echo '<a class="' . esc_attr( $class ) . '" href="' . esc_url( $url ) . '">' . esc_html( $label ) . '</a>';
-        }
-        echo '</h2>';
-
-        if ( 'delete' === $active_tab ) {
-            self::render_delete_tab();
-        } else {
-            // Indicador de estado.
-            $enabled     = self::is_enabled();
-            $status_text = $enabled ? __( 'Comentarios deshabilitados globalmente', 'no-comments' ) : __( 'Comentarios habilitados (comportamiento por defecto)', 'no-comments' );
-            echo '<div class="nc-status nc-status-' . ( $enabled ? 'on' : 'off' ) . '"><span class="nc-dot" aria-hidden="true"></span>' . esc_html( $status_text ) . '</div>';
-
-            // Aviso si los ajustes están forzados por la red.
-            $network_enforced = false;
-            if ( is_multisite() ) {
-                $net              = self::get_network_settings();
-                $network_enforced = ! empty( $net['enforce'] );
-                if ( $network_enforced ) {
-                    $net_url = esc_url( network_admin_url( 'settings.php?page=' . self::PAGE_SLUG . '-network' ) );
-                    // translators: %s: URL to the network-level NO Comments settings page.
-                    echo '<div class="notice notice-info"><p>' . wp_kses_post( sprintf( __( 'Estos ajustes están controlados por la red. Gestiona los valores desde <a href="%s">NO Comments (Network)</a>.', 'no-comments' ), esc_url( $net_url ) ) ) . '</p></div>';
-                }
-            }
-
-            if ( ! $network_enforced ) {
-                echo '<div class="nc-card"><form action="options.php" method="post" class="nc-settings-form">';
-                settings_fields( self::SETTINGS_GROUP );
-                do_settings_sections( self::PAGE_SLUG );
-                submit_button();
-                echo '</form></div>';
-            }
-
-            self::render_transfer_card();
-        }
-        // Branding footer
-        echo '<hr style="margin-top:24px;opacity:.25;" />';
-        echo '<p class="nc-brand">' . wp_kses_post( sprintf(
-            /* translators: 1: author handle, 2: GitHub profile URL, 3: Instagram profile URL. */
-            __( 'Creado por Akela (%1$s) — <a href="%2$s" target="_blank">GitHub</a> · <a href="%3$s" target="_blank">Instagram</a>', 'no-comments' ),
-            '@akelaonline',
-            'https://github.com/akelaonline',
-            'https://www.instagram.com/akelaonline/'
-        ) ) . '</p>';
-        echo '</div>';
-    }
-
-    /** Tarjeta de importación/exportación de ajustes. */
-    private static function render_transfer_card() {
-        $network_enforced = is_multisite() && class_exists( '\\NoComments\\Infrastructure\\OptionsRepository' ) && \NoComments\Infrastructure\OptionsRepository::is_enforced();
-        $export_url = wp_nonce_url( admin_url( 'admin-post.php?action=no_comments_export' ), 'no_comments_export_action', '_wpnonce_no_comments_export' );
-        echo '<div class="nc-card nc-transfer">';
-        echo '<h2>' . esc_html__( 'Importar / Exportar ajustes', 'no-comments' ) . '</h2>';
-        echo '<p>' . esc_html__( 'Exporta los ajustes a un archivo JSON para respaldo o para clonarlos en otro sitio, e impórtalos desde un archivo exportado.', 'no-comments' ) . '</p>';
-        echo '<p><a class="button button-secondary" href="' . esc_url( $export_url ) . '">' . esc_html__( 'Descargar ajustes (JSON)', 'no-comments' ) . '</a></p>';
-        if ( $network_enforced ) {
-            echo '<p class="description">' . esc_html__( 'La importación de ajustes de sitio está desactivada porque la red controla esta configuración.', 'no-comments' ) . '</p>';
-        } else {
-            echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" enctype="multipart/form-data" style="margin-top:10px;">';
-            wp_nonce_field( 'no_comments_import_action', '_wpnonce_no_comments_import' );
-            echo '<input type="hidden" name="action" value="no_comments_import" />';
-            echo '<p><input type="file" name="no_comments_import_file" accept="application/json,.json" /></p>';
-            submit_button( __( 'Importar ajustes', 'no-comments' ), 'secondary' );
-            echo '</form>';
-        }
-        echo '</div>';
-
-        if ( isset( $_GET['import'] ) ) {
-            $msg = [
-                'ok'         => __( 'Ajustes importados correctamente.', 'no-comments' ),
-                'error-file' => __( 'No se recibió un archivo válido.', 'no-comments' ),
-                'error-size' => __( 'El archivo es demasiado grande (máximo 512 KB).', 'no-comments' ),
-                'error-json' => __( 'El archivo debe ser un JSON válido exportado por NO Comments.', 'no-comments' ),
-            ];
-            $key = sanitize_key( wp_unslash( $_GET['import'] ) );
-            if ( isset( $msg[ $key ] ) ) {
-                $class = 'ok' === $key ? 'updated' : 'notice-error';
-                echo '<div class="notice ' . esc_attr( $class ) . ' nc-result"><p>' . esc_html( $msg[ $key ] ) . '</p></div>';
-            }
-        }
-    }
-
-    /** Aplica el bloqueo de comentarios cuando está habilitado */
-    private static function apply_disable_comments() {
-        // Quitar feeds de comentarios: link de descubrimiento y acceso directo.
-        add_filter( 'feed_links_show_comments_feed', '__return_false', 20 );
-        add_action( 'template_redirect', [ __CLASS__, 'filter_comment_feed_redirect' ], 1 );
-
-        // Quitar soporte de comentarios y trackbacks de los post types públicos
-        // que no estén en la lista de excepciones.
-        add_action( 'init', function () {
-            $exceptions = self::exception_types();
-            foreach ( get_post_types( [ 'public' => true ], 'names' ) as $post_type ) {
-                if ( in_array( $post_type, $exceptions, true ) ) {
-                    continue; // Mantener comentarios y trackbacks en los tipos de excepción.
-                }
-                if ( post_type_supports( $post_type, 'comments' ) ) {
-                    remove_post_type_support( $post_type, 'comments' );
-                }
-                if ( post_type_supports( $post_type, 'trackbacks' ) ) {
-                    remove_post_type_support( $post_type, 'trackbacks' );
-                }
-            }
-        }, 100 );
-
-        // Ocultar el menú de Comentarios y el submenú Discusión (solo si no hay excepciones activas).
-        add_action( 'admin_menu', function () {
-            if ( empty( self::exception_types() ) ) {
-                remove_menu_page( 'edit-comments.php' );
-            }
-            remove_submenu_page( 'options-general.php', 'options-discussion.php' );
-        }, 999 );
-
-        // Quitar icono de comentarios del admin bar.
-        add_action( 'admin_bar_menu', function ( $wp_admin_bar ) {
-            if ( empty( self::exception_types() ) ) {
-                $wp_admin_bar->remove_node( 'comments' );
-            }
-        }, 999 );
-
-        // Bloquear accesos directos.
-        add_action( 'admin_init', function () {
-            if ( is_admin() && isset( $GLOBALS['pagenow'] ) && in_array( $GLOBALS['pagenow'], [ 'options-discussion.php' ], true ) ) {
-                wp_safe_redirect( admin_url() );
-                exit;
-            }
-            // Restringir edit-comments.php solo si no hay excepciones activas.
-            if ( is_admin() && empty( self::exception_types() ) && isset( $GLOBALS['pagenow'] ) && in_array( $GLOBALS['pagenow'], [ 'edit-comments.php' ], true ) ) {
-                wp_safe_redirect( admin_url() );
-                exit;
-            }
-        }, 1 );
-
-        // Fallback visual por CSS (respeta excepciones, incluyendo multisite).
-        add_action( 'admin_head', function () {
-            $css = '#adminmenu a[href$="options-discussion.php"]{display:none !important;}';
-            if ( empty( self::exception_types() ) ) {
-                $css .= '#menu-comments, #adminmenu a[href$="edit-comments.php"]{display:none !important;}';
-            }
-            // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- $css contains only plugin-defined selectors.
-            echo '<style id="no-comments-admin-css">' . $css . '</style>';
-        } );
-
-        // Endpoints REST de comentarios (wp/v2/comments)
-        if ( self::get_rest_disabled() ) {
-            add_filter( 'rest_endpoints', function( $endpoints ) {
-                if ( isset( $endpoints['/wp/v2/comments'] ) ) {
-                    unset( $endpoints['/wp/v2/comments'] );
-                }
-                if ( isset( $endpoints['/wp/v2/comments/(?P<id>[\\d]+)'] ) ) {
-                    unset( $endpoints['/wp/v2/comments/(?P<id>[\\d]+)'] );
-                }
-                return $endpoints;
-            } );
-        }
-
-        // XML-RPC: bloquear creación de comentarios
-        if ( self::get_xmlrpc_disabled() ) {
-            add_filter( 'xmlrpc_methods', function( $methods ) {
-                unset( $methods['wp.newComment'] );
-                return $methods;
-            } );
-        }
-    }
-
-    /** Determina si se deben mantener reseñas de WooCommerce */
-    private static function keep_woo_reviews() {
-        if ( class_exists( '\\NoComments\\Infrastructure\\OptionsRepository' ) ) {
-            return \NoComments\Infrastructure\OptionsRepository::effective_keep_woo_reviews();
-        }
-        return (bool) get_option( self::OPTION_WOO, 0 ) && class_exists( 'WooCommerce' );
-    }
-
-    /**
-     * Tipos de contenido que mantienen comentarios con el bloqueo global activo.
-     * Combina la lista configurable de excepciones con WooCommerce (product)
-     * cuando la compatibilidad de reseñas está activa.
-     *
-     * @return string[]
-     */
-    private static function exception_types() {
-        $types = get_option( self::OPTION_EXCEPTIONS, [] );
-        if ( ! is_array( $types ) ) {
-            $types = [];
-        }
-        $types = array_values( array_unique( array_filter( array_map( 'sanitize_key', $types ) ) ) );
-        if ( self::keep_woo_reviews() ) {
-            $types[] = 'product';
-            $types = array_values( array_unique( $types ) );
-        }
-        return $types;
-    }
-
-    /**
-     * Determina si un post es una excepción al cierre global
-     * (excepciones configuradas o reseñas de productos WooCommerce).
-     *
-     * @param int $post_id
-     * @return bool
-     */
-    private static function is_exception_post( $post_id ) {
-        $post_id = absint( $post_id );
-        if ( ! $post_id ) {
-            return false;
-        }
-        $post = get_post( $post_id );
-        return $post && in_array( $post->post_type, self::exception_types(), true );
-    }
-
-    /** Días para el cierre automático de contenido antiguo (0 = desactivado). */
-    public static function auto_close_days() {
-        return max( 0, (int) get_option( self::OPTION_AUTO_CLOSE_DAYS, 0 ) );
-    }
-
-    /**
-     * Indica si un post superó la antigüedad configurada para cerrar comentarios.
-     *
-     * @param int $post_id
-     * @return bool
-     */
-    private static function post_is_too_old( $post_id ) {
-        $days = self::auto_close_days();
-        if ( $days <= 0 ) {
-            return false;
-        }
-        $post = get_post( $post_id );
-        if ( ! $post || empty( $post->post_date ) || '0000-00-00 00:00:00' === $post->post_date ) {
-            return false;
-        }
-        $time = strtotime( $post->post_date );
-        if ( false === $time ) {
-            return false;
-        }
-        return ( time() - $time ) > $days * DAY_IN_SECONDS;
-    }
-
-    /** Filtro: comments_open (bloqueo global y/o cierre por antigüedad) */
-    public static function filter_comments_open( $open, $post_id ) {
-        $post_id = absint( $post_id );
-        if ( self::is_enabled() ) {
-            if ( self::is_exception_post( $post_id ) ) {
-                return $open; // Respetar el estado propio del post (p. ej. reviews).
-            }
-            return false;
-        }
-        if ( self::post_is_too_old( $post_id ) ) {
-            return false;
-        }
-        return $open;
-    }
-
-    /** Filtro: pings_open (bloqueo global y/o cierre por antigüedad) */
-    public static function filter_pings_open( $open, $post_id ) {
-        if ( self::is_enabled() ) {
-            if ( self::is_exception_post( $post_id ) ) {
-                return $open; // Los tipos de excepción conservan pings.
-            }
-            return false;
-        }
-        if ( self::post_is_too_old( $post_id ) ) {
-            return false;
-        }
-        return $open;
-    }
-
-    /** Filtro: comments_array con excepción para productos */
-    public static function filter_comments_array( $comments, $post_id ) {
-        if ( ! self::is_enabled() ) {
-            return $comments;
-        }
-        if ( self::is_exception_post( $post_id ) ) {
-            return $comments; // mostrar reviews
-        }
-        return [];
-    }
-
-    /**
-     * Filtro: evita la consulta a la base de datos cuando los comentarios
-     * están cerrados globalmente. Mantiene intactos:
-     *  - los conteos (admin y dry-run);
-     *  - los estados de moderación (spam/hold/trash) usados por la limpieza;
-     *  - las consultas por IDs (borrado masivo);
-     *  - las consultas de posts de excepción (reseñas de productos).
-     *
-     * @param mixed            $comments
-     * @param \WP_Comment_Query $query
-     * @return mixed
-     */
-    public static function filter_comments_pre_query( $comments, $query ) {
-        if ( ! self::is_enabled() || ! isset( $query->query_vars ) ) {
-            return $comments;
-        }
-        $vars = $query->query_vars;
-
-        // Conteos, consultas de administración (IDs) y estados de moderación se dejan pasar.
-        if ( ! empty( $vars['count'] ) || 'ids' === ( isset( $vars['fields'] ) ? $vars['fields'] : 'all' ) ) {
-            return $comments;
-        }
-        $status = isset( $vars['status'] ) ? $vars['status'] : 'approve';
-        if ( in_array( $status, [ 'spam', 'hold', 'trash' ], true ) ) {
-            return $comments;
-        }
-
-        $post_id = isset( $vars['post_id'] ) ? absint( $vars['post_id'] ) : 0;
-        if ( $post_id && self::is_exception_post( $post_id ) ) {
-            return $comments;
-        }
-        return [];
-    }
-
-    /**
-     * Bloquea el acceso directo a los feeds de comentarios
-     * (p. ej. ?feed=comments-rss2) redirigiendo al home.
-     */
-    public static function filter_comment_feed_redirect() {
-        $feed = get_query_var( 'feed' );
-        $is_comment_feed = is_comment_feed() || ( is_string( $feed ) && 0 === strpos( $feed, 'comments-' ) );
-        if ( ! $is_comment_feed || is_singular() ) {
-            return; // En un singular con withcomments los comentarios ya están cerrados.
-        }
-        wp_safe_redirect( home_url( '/' ), 301 );
-        exit;
-    }
-
-    /** Filtro: bloquear creación (bloqueo global y/o cierre por antigüedad). */
-    public static function filter_pre_comment_approved( $approved, $commentdata ) {
-        $post_id = isset( $commentdata['comment_post_ID'] ) ? absint( $commentdata['comment_post_ID'] ) : 0;
-
-        if ( self::is_enabled() ) {
-            if ( $post_id && self::is_exception_post( $post_id ) ) {
-                return $approved; // Respetar el flujo normal de reviews.
-            }
-            return new WP_Error( 'no_comments_disabled', __( 'Los comentarios están cerrados en todo el sitio.', 'no-comments' ), [ 'status' => 403 ] );
-        }
-
-        if ( $post_id && self::post_is_too_old( $post_id ) ) {
-            return new WP_Error( 'no_comments_auto_closed', __( 'Los comentarios están cerrados para contenido antiguo.', 'no-comments' ), [ 'status' => 403 ] );
-        }
-
-        return $approved;
-    }
-
-    /**
-     * Encola los assets de la página de ajustes del plugin (sitio y red).
-     *
-     * @param string $hook Hook actual de la pantalla admin.
-     */
-    public static function enqueue_admin_assets( $hook ) {
-        $allowed_hooks = [
-            'settings_page_' . self::PAGE_SLUG,
-            'settings_page_' . self::PAGE_SLUG . '-network',
-        ];
-        if ( ! in_array( $hook, $allowed_hooks, true ) ) {
-            return;
-        }
-        wp_enqueue_style(
-            'no-comments-admin',
-            NO_COMMENTS_URL . 'assets/css/admin.css',
-            [],
-            NO_COMMENTS_VERSION
-        );
-        wp_enqueue_script(
-            'no-comments-admin',
-            NO_COMMENTS_URL . 'assets/js/admin.js',
-            [],
-            NO_COMMENTS_VERSION,
-            true
-        );
-        wp_localize_script( 'no-comments-admin', 'noCommentsAdmin', [
-            /* translators: %s: scope label (spam, pending, trash, all). */
-            'scopeSelected' => __( 'Ámbito seleccionado: %s', 'no-comments' ),
-            /* translators: %s: scope label. */
-            'confirmDelete' => __( '¿Seguro que deseas ejecutar la limpieza (%s)? Esta acción no se puede deshacer.', 'no-comments' ),
-            'confirmTrash'  => __( '¿Mover los comentarios seleccionados a la Papelera? Podrás restaurarlos después.', 'no-comments' ),
-        ] );
-    }
-
-    /** Reordenar submenú para mostrar antes de Discusión */
-    public static function reorder_settings_submenu() {
-        global $submenu;
-        if ( empty( $submenu['options-general.php'] ) || ! is_array( $submenu['options-general.php'] ) ) {
-            return;
-        }
-        $settings = &$submenu['options-general.php'];
-        $no_comments_index = null;
-        $discussion_index  = null;
-        foreach ( $settings as $index => $item ) {
-            if ( isset( $item[2] ) && $item[2] === self::PAGE_SLUG ) {
-                $no_comments_index = $index;
-            }
-            if ( isset( $item[2] ) && $item[2] === 'options-discussion.php' ) {
-                $discussion_index = $index;
-            }
-        }
-        if ( $no_comments_index === null || $discussion_index === null ) {
-            return;
-        }
-        if ( $no_comments_index > $discussion_index ) {
-            $item = $settings[ $no_comments_index ];
-            unset( $settings[ $no_comments_index ] );
-            $settings = array_values( $settings );
-            $discussion_index_new = null;
-            foreach ( $settings as $i => $it ) {
-                if ( isset( $it[2] ) && $it[2] === 'options-discussion.php' ) {
-                    $discussion_index_new = $i;
-                    break;
-                }
-            }
-            if ( $discussion_index_new !== null ) {
-                array_splice( $settings, $discussion_index_new, 0, [ $item ] );
-            }
-        }
-    }
-
-    /** Pestaña de borrado masivo */
-    private static function render_delete_tab() {
-        $counts = wp_count_comments();
-
-        // Tarjeta de resumen con contadores clicables.
-        echo '<div class="nc-card">';
-        echo '<h2>' . esc_html__( 'Delete Comments', 'no-comments' ) . '</h2>';
-        echo '<p class="nc-muted">' . esc_html__( 'Estas acciones son destructivas. Te sugerimos hacer un respaldo antes de continuar.', 'no-comments' ) . '</p>';
-
-        $stats = [
-            'approved' => [ __( 'Aprobados', 'no-comments' ), intval( $counts->approved ), '' ],
-            'pending'  => [ __( 'Pendientes', 'no-comments' ), intval( $counts->moderated ), 'nc-stat-pending' ],
-            'spam'     => [ __( 'Spam', 'no-comments' ), intval( $counts->spam ), 'nc-stat-spam' ],
-            'trash'    => [ __( 'Papelera', 'no-comments' ), intval( $counts->trash ), 'nc-stat-trash' ],
-            'total'    => [ __( 'Total', 'no-comments' ), intval( $counts->total_comments ), '' ],
-        ];
-        $scope_map = [
-            'approved' => 'all',
-            'pending'  => 'pending',
-            'spam'     => 'spam',
-            'trash'    => 'trash',
-            'total'    => 'all',
-        ];
-
-        echo '<ul class="nc-stats">';
-        foreach ( $stats as $key => $stat ) {
-            /* translators: 1: stat label (e.g. Spam), 2: count. */
-            $stat_label = sprintf( __( '%1$s: %2$d', 'no-comments' ), $stat[0], $stat[1] );
-            echo '<li class="' . esc_attr( $stat[2] ) . '" data-scope="' . esc_attr( $scope_map[ $key ] ) . '" role="button" tabindex="0" aria-label="' . esc_attr( $stat_label ) . '">';
-            echo '<span class="nc-stat-value">' . esc_html( (string) $stat[1] ) . '</span>';
-            echo '<span class="nc-stat-label">' . esc_html( $stat[0] ) . '</span>';
-            echo '</li>';
-        }
-        echo '</ul>';
-        // Región aria-live para feedback.
-        echo '<div id="nc-live" class="screen-reader-text" aria-live="polite"></div>';
-        echo '</div>';
-
-        // Tarjeta del formulario de limpieza.
-        echo '<div class="nc-card">';
-        $action_url = admin_url( 'admin-post.php' );
-        $selected_scope = isset( $_GET['scope'] ) ? sanitize_key( wp_unslash( $_GET['scope'] ) ) : 'spam';
-        $pre_types      = [];
-        $types_query    = isset( $_GET['types'] ) ? sanitize_text_field( wp_unslash( $_GET['types'] ) ) : '';
-        if ( '' !== $types_query ) {
-            $pre_types = array_filter( array_map( 'sanitize_key', array_map( 'trim', explode( ',', $types_query ) ) ) );
-        }
-
-        echo '<form method="post" action="' . esc_url( $action_url ) . '" id="nc-delete-form">';
-        wp_nonce_field( 'no_comments_delete_action', '_wpnonce_no_comments_delete' );
-        echo '<input type="hidden" name="action" value="no_comments_delete" />';
-
-        // Alcance: radios con estilo segmented (accesible por teclado/lector).
-        echo '<fieldset class="nc-field">';
-        echo '<legend>' . esc_html__( 'Ámbito de borrado', 'no-comments' ) . '</legend>';
-        echo '<div class="nc-segmented" role="radiogroup" aria-label="' . esc_attr__( 'Ámbito de borrado', 'no-comments' ) . '">';
-        $scopes = [
-            'spam'    => __( 'Spam', 'no-comments' ),
-            'pending' => __( 'Pendientes', 'no-comments' ),
-            'trash'   => __( 'Papelera', 'no-comments' ),
-            'all'     => __( 'Todos', 'no-comments' ),
-        ];
-        foreach ( $scopes as $value => $label ) {
-            echo '<input type="radio" id="nc-scope-' . esc_attr( $value ) . '" name="delete_scope" value="' . esc_attr( $value ) . '" ' . checked( $selected_scope, $value, false ) . ' />'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- checked() returns a safe HTML attribute.
-            echo '<label for="nc-scope-' . esc_attr( $value ) . '">' . esc_html( $label ) . '</label>';
-        }
-        echo '</div>';
-        echo '<p class="nc-field-hint">' . esc_html__( 'También podés clickear los contadores de arriba para preseleccionar el alcance.', 'no-comments' ) . '</p>';
-        echo '</fieldset>';
-
-        // Filtro por tipos de contenido.
-        $types = get_post_types( [ 'public' => true ], 'objects' );
-        if ( ! empty( $types ) ) {
-            echo '<fieldset class="nc-field">';
-            echo '<legend>' . esc_html__( 'Limitar por tipos de contenido', 'no-comments' ) . '</legend>';
-            echo '<p class="nc-field-hint">' . esc_html__( 'Si no seleccionás ningún tipo, se aplica a todos.', 'no-comments' ) . '</p>';
-            echo '<div class="nc-chips">';
-            foreach ( $types as $slug => $obj ) {
-                $label = isset( $obj->labels->singular_name ) ? $obj->labels->singular_name : $slug;
-                echo '<input type="checkbox" id="nc-type-' . esc_attr( $slug ) . '" name="delete_types[]" value="' . esc_attr( $slug ) . '" ' . checked( in_array( $slug, $pre_types, true ), true, false ) . ' />'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- checked() returns a safe HTML attribute.
-                echo '<label for="nc-type-' . esc_attr( $slug ) . '">' . esc_html( $label ) . '</label>';
-            }
-            echo '</div>';
-            echo '</fieldset>';
-        }
-
-        // Estrategia de borrado.
-        echo '<fieldset class="nc-field">';
-        echo '<legend>' . esc_html__( 'Estrategia', 'no-comments' ) . '</legend>';
-        echo '<div class="nc-strategy">';
-        echo '<input type="radio" id="nc-strategy-delete" name="delete_strategy" value="delete" checked />';
-        echo '<label for="nc-strategy-delete">';
-        echo '<span class="nc-strategy-title">' . esc_html__( 'Borrar permanentemente', 'no-comments' ) . '</span>';
-        echo '<span class="nc-strategy-desc">' . esc_html__( 'Elimina los comentarios de forma definitiva (incluye la Papelera cuando el alcance lo requiera).', 'no-comments' ) . '</span>';
-        echo '</label>';
-        echo '<input type="radio" id="nc-strategy-trash" name="delete_strategy" value="trash" />';
-        echo '<label for="nc-strategy-trash">';
-        echo '<span class="nc-strategy-title">' . esc_html__( 'Mover a Papelera', 'no-comments' ) . '</span>';
-        echo '<span class="nc-strategy-desc">' . esc_html__( 'Acción reversible: los comentarios quedan en Papelera. Vaciar Papelera siempre es definitivo.', 'no-comments' ) . '</span>';
-        echo '</label>';
-        echo '</div>';
-        echo '</fieldset>';
-
-        // Dry-run y confirmación.
-        echo '<div class="nc-row">';
-        echo '<div class="nc-switch">';
-        echo '<label><input type="checkbox" name="dry_run" value="1" checked /> ' . esc_html__( 'Simulación (dry-run): solo calcula y no borra', 'no-comments' ) . '</label>';
-        echo '<p class="nc-field-hint">' . esc_html__( 'Desmarcá esta opción para ejecutar la limpieza real.', 'no-comments' ) . '</p>';
-        echo '</div>';
-        echo '<div>';
-        echo '<label class="nc-confirm-label" for="nc-confirm">' . esc_html__( 'Escribí DELETE para confirmar', 'no-comments' ) . '</label>';
-        echo '<input type="text" id="nc-confirm" name="confirm" value="" placeholder="DELETE" class="nc-confirm-input" autocomplete="off" />';
-        echo '<div class="nc-confirm-error" hidden>' . esc_html__( 'Debes escribir DELETE para confirmar.', 'no-comments' ) . '</div>';
-        echo '</div>';
-        echo '</div>';
-
-        echo '<div class="nc-actions">';
-        submit_button( __( 'Ejecutar limpieza', 'no-comments' ), 'delete primary large' );
-        echo '</div>';
-        echo '</form>';
-        echo '</div>';
-
-        // Mensajes de resultado con detalle.
-        if ( isset( $_GET['deleted'] ) && isset( $_GET['scope'] ) ) {
-            $deleted  = absint( $_GET['deleted'] );
-            $scope    = sanitize_key( wp_unslash( $_GET['scope'] ) );
-            $sim      = isset( $_GET['dry'] ) && '1' === sanitize_key( wp_unslash( $_GET['dry'] ) );
-            $strategy = isset( $_GET['strategy'] ) ? sanitize_key( wp_unslash( $_GET['strategy'] ) ) : '';
-            $types_q  = isset( $_GET['types'] ) ? sanitize_text_field( wp_unslash( $_GET['types'] ) ) : '';
-            $types_h  = $types_q ? $types_q : __( 'todos', 'no-comments' );
-            $msg      = $sim ? __( 'Simulación (dry-run): se borrarían', 'no-comments' ) : __( 'Eliminados', 'no-comments' );
-            printf( '<div class="notice %s nc-result" role="status" aria-live="polite"><p>%s %d — %s: %s · %s: %s · %s: %s.</p></div>',
-                $sim ? 'notice-info' : 'updated',
-                esc_html( $msg ),
-                absint( $deleted ),
-                esc_html__( 'alcance', 'no-comments' ), esc_html( $scope ),
-                esc_html__( 'tipos', 'no-comments' ), esc_html( $types_h ),
-                esc_html__( 'estrategia', 'no-comments' ), esc_html( $strategy ?: '-' )
+        foreach ( $boolean_options as $option => $default ) {
+            register_setting(
+                self::SETTINGS_GROUP,
+                $option,
+                array(
+                    'type'              => 'boolean',
+                    'sanitize_callback' => 'rest_sanitize_boolean',
+                    'default'           => $default,
+                )
             );
         }
-        if ( isset( $_GET['msg'] ) && 'confirm' === $_GET['msg'] ) {
-            echo '<div class="notice notice-warning nc-result"><p>' . esc_html__( 'Debes escribir DELETE para confirmar.', 'no-comments' ) . '</p></div>';
-        }
-    }
 
-    /** Maneja el borrado vía admin-post */
-    public static function handle_delete_request() {
-        if ( ! current_user_can( 'manage_options' ) ) {
-            wp_die( esc_html__( 'Permisos insuficientes.', 'no-comments' ) );
-        }
-        check_admin_referer( 'no_comments_delete_action', '_wpnonce_no_comments_delete' );
+        register_setting(
+            self::SETTINGS_GROUP,
+            'no_comments_post_type_exceptions',
+            array(
+                'type'              => 'array',
+                'sanitize_callback' => array( $this, 'sanitize_post_types' ),
+                'default'           => array(),
+            )
+        );
 
-        $scope    = isset( $_POST['delete_scope'] ) ? sanitize_key( wp_unslash( $_POST['delete_scope'] ) ) : 'spam';
-        $confirm  = isset( $_POST['confirm'] ) ? sanitize_text_field( wp_unslash( $_POST['confirm'] ) ) : '';
-        $dry_run  = ! empty( $_POST['dry_run'] );
-        $strategy = isset( $_POST['delete_strategy'] ) && 'trash' === sanitize_key( wp_unslash( $_POST['delete_strategy'] ) ) ? 'trash' : 'delete';
-        $types = [];
-        // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Every array element is sanitized with sanitize_key() immediately below.
-        $raw_types = isset( $_POST['delete_types'] ) && is_array( $_POST['delete_types'] ) ? wp_unslash( $_POST['delete_types'] ) : [];
-        foreach ( $raw_types as $t ) {
-            $types[] = sanitize_key( $t );
-        }
-        $types = array_values( array_unique( array_filter( $types ) ) );
+        register_setting(
+            self::SETTINGS_GROUP,
+            'no_comments_auto_close_days',
+            array(
+                'type'              => 'integer',
+                'sanitize_callback' => 'absint',
+                'default'           => 0,
+            )
+        );
 
-        if ( ! $dry_run && 'DELETE' !== $confirm ) {
-            wp_safe_redirect( add_query_arg( [ 'page' => self::PAGE_SLUG, 'tab' => 'delete', 'msg' => 'confirm' ], admin_url( 'options-general.php' ) ) );
-            exit;
-        }
+        register_setting(
+            self::SETTINGS_GROUP,
+            'no_comments_cleanup_interval',
+            array(
+                'type'              => 'string',
+                'sanitize_callback' => array( $this, 'sanitize_cleanup_interval' ),
+                'default'           => 'daily',
+            )
+        );
 
-        $types_q = '';
-        if ( ! empty( $types ) ) { $types_q = implode( ',', $types ); }
-        if ( $dry_run ) {
-            $deleted = self::count_comments_for_scope( $scope, $types );
-            $args = [ 'page' => self::PAGE_SLUG, 'tab' => 'delete', 'deleted' => $deleted, 'scope' => $scope, 'dry' => 1, 'strategy' => $strategy ];
-            if ( $types_q ) { $args['types'] = $types_q; }
-            $url = add_query_arg( $args, admin_url( 'options-general.php' ) );
-        } else {
-            $deleted = self::delete_comments( $scope, $types, $strategy );
-            $args = [ 'page' => self::PAGE_SLUG, 'tab' => 'delete', 'deleted' => $deleted, 'scope' => $scope, 'dry' => 0, 'strategy' => $strategy ];
-            if ( $types_q ) { $args['types'] = $types_q; }
-            $url = add_query_arg( $args, admin_url( 'options-general.php' ) );
-        }
-        wp_safe_redirect( $url );
-        exit;
-    }
+        register_setting(
+            self::SETTINGS_GROUP,
+            'no_comments_cleanup_scope',
+            array(
+                'type'              => 'string',
+                'sanitize_callback' => array( $this, 'sanitize_cleanup_scope' ),
+                'default'           => 'spam',
+            )
+        );
 
-    /**
-     * Exporta todos los ajustes de NO Comments a un array serializable.
-     *
-     * @return array
-     */
-    public static function get_export_payload() {
-        $payload = [
-            'plugin'   => 'no-comments',
-            'version'  => NO_COMMENTS_VERSION,
-            'exported' => gmdate( 'c' ),
-            'site'     => [
-                'enabled'               => (bool) get_option( self::OPTION_KEY, 0 ),
-                'rest'                  => (bool) get_option( self::OPTION_REST, 1 ),
-                'xmlrpc'                => (bool) get_option( self::OPTION_XMLRPC, 1 ),
-                'woo'                   => (bool) get_option( self::OPTION_WOO, 0 ),
-                'exceptions'            => self::exception_types(),
-                'auto_close_days'       => self::auto_close_days(),
-                'auto_cleanup'          => self::auto_cleanup_enabled(),
-                'auto_cleanup_interval' => self::auto_cleanup_interval(),
-            ],
-        ];
-        if ( is_multisite() ) {
-            $payload['network'] = self::get_network_settings();
-        }
-        return $payload;
-    }
+        register_setting(
+            self::SETTINGS_GROUP,
+            'no_comments_cleanup_strategy',
+            array(
+                'type'              => 'string',
+                'sanitize_callback' => array( $this, 'sanitize_cleanup_strategy' ),
+                'default'           => 'delete',
+            )
+        );
 
-    /**
-     * Importa ajustes desde un array validado (whitelist de claves).
-     *
-     * @param array  $data  Payload (puede incluir las claves site/network de un export).
-     * @param string $level site|network
-     * @return array Claves aplicadas por nivel: [ 'site' => string[], 'network' => string[] ]
-     */
-    public static function import_settings( array $data, $level = 'site' ) {
-        $applied = [ 'site' => [], 'network' => [] ];
-
-        $site_map = [
-            'enabled' => self::OPTION_KEY,
-            'rest'    => self::OPTION_REST,
-            'xmlrpc'  => self::OPTION_XMLRPC,
-            'woo'     => self::OPTION_WOO,
-        ];
-
-        if ( 'network' === $level && is_multisite() ) {
-            $src = isset( $data['network'] ) && is_array( $data['network'] ) ? $data['network'] : $data;
-            $net = self::get_network_settings();
-            foreach ( [ 'enforce', 'enabled', 'rest', 'xmlrpc', 'woo' ] as $key ) {
-                if ( array_key_exists( $key, $src ) ) {
-                    $net[ $key ] = $src[ $key ] ? 1 : 0;
-                    $applied['network'][] = $key;
-                }
-            }
-            update_site_option( self::OPTION_NETWORK, $net );
-        } elseif ( 'site' === $level ) {
-            $src = isset( $data['site'] ) && is_array( $data['site'] ) ? $data['site'] : $data;
-
-            foreach ( $site_map as $key => $option ) {
-                if ( array_key_exists( $key, $src ) ) {
-                    update_option( $option, $src[ $key ] ? 1 : 0 );
-                    $applied['site'][] = $key;
-                }
-            }
-            if ( array_key_exists( 'exceptions', $src ) ) {
-                $exceptions = is_array( $src['exceptions'] ) ? $src['exceptions'] : [];
-                update_option( self::OPTION_EXCEPTIONS, array_values( array_unique( array_filter( array_map( 'sanitize_key', $exceptions ) ) ) ) );
-                $applied['site'][] = 'exceptions';
-            }
-            if ( array_key_exists( 'auto_close_days', $src ) ) {
-                update_option( self::OPTION_AUTO_CLOSE_DAYS, max( 0, (int) $src['auto_close_days'] ) );
-                $applied['site'][] = 'auto_close_days';
-            }
-            if ( array_key_exists( 'auto_cleanup', $src ) ) {
-                update_option( self::OPTION_AUTO_CLEANUP, $src['auto_cleanup'] ? 1 : 0 );
-                $applied['site'][] = 'auto_cleanup';
-            }
-            if ( array_key_exists( 'auto_cleanup_interval', $src ) ) {
-                $interval = $src['auto_cleanup_interval'];
-                update_option( self::OPTION_AUTO_CLEANUP_INT, in_array( $interval, [ 'daily', 'twicedaily', 'weekly' ], true ) ? $interval : 'daily' );
-                $applied['site'][] = 'auto_cleanup_interval';
-            }
-            self::maybe_schedule_cleanup();
-        }
-
-        return $applied;
-    }
-
-    /**
-     * Snapshot de estado efectivo para UI/CLI (respeta multisite).
-     *
-     * @return array
-     */
-    public static function get_status() {
-        return [
-            'enabled'          => self::is_enabled(),
-            'rest'             => self::get_rest_disabled(),
-            'xmlrpc'           => self::get_xmlrpc_disabled(),
-            'woo'              => self::keep_woo_reviews(),
-            'network_enforced' => is_multisite() && class_exists( '\\NoComments\\Infrastructure\\OptionsRepository' ) && \NoComments\Infrastructure\OptionsRepository::is_enforced(),
-        ];
-    }
-
-    /** Descarga un JSON con los ajustes actuales. */
-    public static function handle_export_request() {
-        if ( ! current_user_can( 'manage_options' ) ) {
-            wp_die( esc_html__( 'Permisos insuficientes.', 'no-comments' ) );
-        }
-        check_admin_referer( 'no_comments_export_action', '_wpnonce_no_comments_export' );
-
-        nocache_headers();
-        header( 'Content-Type: application/json; charset=utf-8' );
-        header( 'Content-Disposition: attachment; filename="no-comments-settings-' . gmdate( 'Ymd-His' ) . '.json"' );
-        echo wp_json_encode( self::get_export_payload(), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
-        exit;
-    }
-
-    /** Importa ajustes desde un archivo JSON subido. */
-    public static function handle_import_request() {
-        if ( ! current_user_can( 'manage_options' ) ) {
-            wp_die( esc_html__( 'Permisos insuficientes.', 'no-comments' ) );
-        }
-        check_admin_referer( 'no_comments_import_action', '_wpnonce_no_comments_import' );
-
-        $redirect = add_query_arg( [ 'page' => self::PAGE_SLUG, 'import' => 'error-file' ], admin_url( 'options-general.php' ) );
-
-        if ( ! isset( $_FILES['no_comments_import_file'] ) ) {
-            wp_safe_redirect( $redirect );
-            exit;
-        }
-
-        // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- El archivo se valida por tamaño y contenido JSON.
-        $file = $_FILES['no_comments_import_file'];
-        if ( UPLOAD_ERR_OK !== (int) $file['error'] ) {
-            wp_safe_redirect( $redirect );
-            exit;
-        }
-
-        if ( (int) $file['size'] > 512 * 1024 ) { // 512 KB es más que suficiente para un JSON de ajustes.
-            wp_safe_redirect( add_query_arg( 'import', 'error-size', $redirect ) );
-            exit;
-        }
-
-        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Lectura de un upload validado por tamaño y JSON.
-        $raw  = file_get_contents( $file['tmp_name'] );
-        $data = is_string( $raw ) ? json_decode( $raw, true ) : null;
-        if ( ! is_array( $data ) ) {
-            wp_safe_redirect( add_query_arg( 'import', 'error-json', $redirect ) );
-            exit;
-        }
-
-        self::import_settings( $data, 'site' );
-        wp_safe_redirect( add_query_arg( 'import', 'ok', $redirect ) );
-        exit;
-    }
-
-    /**
-     * Site Health: registra el test de estado de NO Comments.
-     */
-    public static function register_site_health_tests( $tests ) {
-        $tests['direct']['no_comments_status'] = [
-            'label' => __( 'NO Comments: bloqueo de comentarios', 'no-comments' ),
-            'test'  => [ __CLASS__, 'site_health_test_status' ],
-        ];
-        return $tests;
-    }
-
-    /**
-     * Site Health test callback.
-     */
-    public static function site_health_test_status() {
-        $enabled = self::is_enabled();
-        if ( $enabled ) {
-            return [
-                'label'       => __( 'NO Comments está bloqueando comentarios globalmente', 'no-comments' ),
-                'status'      => 'good',
-                'badge'       => [ 'label' => __( 'NO Comments', 'no-comments' ), 'color' => '#2ecc71' ],
-                'description' => '<p>' . esc_html__( 'Los formularios de comentarios y pings están cerrados.', 'no-comments' ) . '</p>',
-            ];
-        }
-        return [
-            'label'       => __( 'NO Comments está desactivado', 'no-comments' ),
-            'status'      => 'recommended',
-            'badge'       => [ 'label' => __( 'NO Comments', 'no-comments' ), 'color' => '#f0ad4e' ],
-            'description' => '<p>' . esc_html__( 'Actívalo si quieres bloquear comentarios en todo el sitio.', 'no-comments' ) . '</p>',
-            'actions'     => '<p><a class="button button-primary" href="' . esc_url( add_query_arg( [ 'page' => self::PAGE_SLUG ], admin_url( 'options-general.php' ) ) ) . '">' . esc_html__( 'Ir a ajustes', 'no-comments' ) . '</a></p>',
-        ];
-    }
-
-    /**
-     * Añade un ítem en la barra de administración para togglear ON/OFF rápidamente.
-     */
-    public static function admin_bar_toggle_node( $wp_admin_bar ) {
-        if ( ! is_admin_bar_showing() || ! current_user_can( 'manage_options' ) ) {
-            return;
-        }
-        // Con la red en modo enforce el toggle local no tiene efecto: no se muestra.
-        if ( is_multisite() && class_exists( '\\NoComments\\Infrastructure\\OptionsRepository' ) && \NoComments\Infrastructure\OptionsRepository::is_enforced() ) {
-            return;
-        }
-        $enabled = self::is_enabled();
-        $text    = $enabled ? __( 'NO Comments: ON', 'no-comments' ) : __( 'NO Comments: OFF', 'no-comments' );
-        $action  = wp_nonce_url( admin_url( 'admin-post.php?action=no_comments_toggle' ), 'no_comments_toggle_action', '_wpnonce_no_comments_toggle' );
-
-        $wp_admin_bar->add_node( [
-            'id'    => 'no-comments-toggle',
-            'title' => esc_html( $text ),
-            'href'  => $action,
-            'meta'  => [ 'class' => $enabled ? 'no-comments-on' : 'no-comments-off' ],
-        ] );
-    }
-
-    /**
-     * Maneja el toggle rápido desde admin-post.
-     */
-    public static function handle_toggle_request() {
-        if ( ! current_user_can( 'manage_options' ) ) {
-            wp_die( esc_html__( 'Permisos insuficientes.', 'no-comments' ) );
-        }
-        check_admin_referer( 'no_comments_toggle_action', '_wpnonce_no_comments_toggle' );
-
-        if ( is_multisite() && class_exists( '\\NoComments\\Infrastructure\\OptionsRepository' ) && \NoComments\Infrastructure\OptionsRepository::is_enforced() ) {
-            wp_safe_redirect( add_query_arg( [ 'page' => self::PAGE_SLUG ], admin_url( 'options-general.php' ) ) );
-            exit;
-        }
-
-        $current = self::is_enabled();
-        update_option( self::OPTION_KEY, $current ? 0 : 1 );
-        wp_safe_redirect( wp_get_referer() ? wp_get_referer() : admin_url() );
-        exit;
-    }
-
-    /**
-     * Agrega enlace a Ajustes en la fila del plugin.
-     */
-    public static function plugin_action_links( $links ) {
-        $url = esc_url( add_query_arg( [ 'page' => self::PAGE_SLUG ], admin_url( 'options-general.php' ) ) );
-        $links[] = '<a href="' . $url . '">' . esc_html__( 'Ajustes', 'no-comments' ) . '</a>';
-        return $links;
-    }
-
-    /**
-     * Agrega enlaces en la fila del plugin para branding (web/redes).
-     */
-    public static function plugin_row_meta( $links, $file ) {
-        if ( plugin_basename( __FILE__ ) === $file ) {
-            $links[] = '<a href="https://github.com/akelaonline" target="_blank">' . esc_html__( 'GitHub', 'no-comments' ) . '</a>';
-            $links[] = '<a href="https://www.instagram.com/akelaonline/" target="_blank">' . esc_html__( 'Instagram', 'no-comments' ) . '</a>';
-        }
-        return $links;
-    }
-
-    /**
-     * REST API: registra endpoints no-comments/v1
-     */
-    public static function register_rest_routes() {
-        $ns = 'no-comments/v1';
-        register_rest_route( $ns, '/settings', [
-            [
-                'methods'             => \WP_REST_Server::READABLE,
-                'callback'            => [ __CLASS__, 'rest_get_settings' ],
-                'permission_callback' => function () { return current_user_can( 'manage_options' ) || current_user_can( 'manage_network_options' ); },
-            ],
-            [
-                'methods'             => \WP_REST_Server::EDITABLE,
-                'callback'            => [ __CLASS__, 'rest_update_settings' ],
-                'permission_callback' => function () { return current_user_can( 'manage_options' ) || current_user_can( 'manage_network_options' ); },
-                'args'                => [
-                    'level'                 => [ 'type' => 'string', 'enum' => [ 'site', 'network' ], 'required' => false ],
-                    'enabled'               => [ 'type' => 'boolean', 'required' => false ],
-                    'rest'                  => [ 'type' => 'boolean', 'required' => false ],
-                    'xmlrpc'                => [ 'type' => 'boolean', 'required' => false ],
-                    'woo'                   => [ 'type' => 'boolean', 'required' => false ],
-                    'enforce'               => [ 'type' => 'boolean', 'required' => false ],
-                    'exceptions'            => [ 'type' => 'array', 'required' => false, 'items' => [ 'type' => 'string' ] ],
-                    'auto_close_days'       => [ 'type' => 'integer', 'required' => false ],
-                    'auto_cleanup'          => [ 'type' => 'boolean', 'required' => false ],
-                    'auto_cleanup_interval' => [ 'type' => 'string', 'enum' => [ 'daily', 'twicedaily', 'weekly' ], 'required' => false ],
-                ],
-            ],
-        ] );
-
-        register_rest_route( $ns, '/actions/delete', [
-            'methods'             => \WP_REST_Server::CREATABLE,
-            'callback'            => [ __CLASS__, 'rest_delete' ],
-            'permission_callback' => function () { return current_user_can( 'manage_options' ); },
-            'args'                => [
-                'scope'    => [ 'type' => 'string', 'enum' => [ 'spam', 'pending', 'trash', 'all' ], 'required' => true ],
-                'types'    => [ 'type' => 'array', 'required' => false, 'items' => [ 'type' => 'string' ] ],
-                'dry_run'  => [ 'type' => 'boolean', 'required' => false ],
-                'strategy' => [ 'type' => 'string', 'enum' => [ 'delete', 'trash' ], 'required' => false ],
-            ],
-        ] );
-
-        register_rest_route( $ns, '/settings/export', [
-            'methods'             => \WP_REST_Server::READABLE,
-            'callback'            => [ __CLASS__, 'rest_export_settings' ],
-            'permission_callback' => function () { return current_user_can( 'manage_options' ); },
-        ] );
-
-        register_rest_route( $ns, '/settings/import', [
-            'methods'             => \WP_REST_Server::CREATABLE,
-            'callback'            => [ __CLASS__, 'rest_import_settings' ],
-            'permission_callback' => function () { return current_user_can( 'manage_options' ); },
-            'args'                => [
-                'level'    => [ 'type' => 'string', 'enum' => [ 'site', 'network' ], 'required' => false ],
-                'settings' => [ 'type' => 'object', 'required' => true ],
-            ],
-        ] );
-    }
-
-    /**
-     * REST: GET settings snapshot (considera multisite)
-     */
-    public static function rest_get_settings( $request ) {
-        $data = [
-            'enabled' => self::is_enabled(),
-            'site'    => [
-                'enabled'             => (bool) get_option( self::OPTION_KEY, 0 ),
-                'rest'                => (bool) get_option( self::OPTION_REST, 1 ),
-                'xmlrpc'              => (bool) get_option( self::OPTION_XMLRPC, 1 ),
-                'woo'                 => (bool) get_option( self::OPTION_WOO, 0 ),
-                'exceptions'          => self::exception_types(),
-                'auto_close_days'     => self::auto_close_days(),
-                'auto_cleanup'        => self::auto_cleanup_enabled(),
-                'auto_cleanup_interval' => self::auto_cleanup_interval(),
-            ],
-            'effective' => [
-                'rest'   => self::get_rest_disabled(),
-                'xmlrpc' => self::get_xmlrpc_disabled(),
-                'woo'    => self::keep_woo_reviews(),
-            ],
-        ];
-        if ( is_multisite() ) {
-            $data['network'] = self::get_network_settings();
-        }
-        return $data;
-    }
-
-    /**
-     * REST: POST settings (site o network)
-     */
-    public static function rest_update_settings( $request ) {
-        $level      = $request->get_param( 'level' ) ?: 'site';
-        $enabled    = $request->get_param( 'enabled' );
-        $rest       = $request->get_param( 'rest' );
-        $xmlrpc     = $request->get_param( 'xmlrpc' );
-        $woo        = $request->get_param( 'woo' );
-        $enforce    = $request->get_param( 'enforce' );
-        $exceptions = $request->get_param( 'exceptions' );
-        $auto_close = $request->get_param( 'auto_close_days' );
-        $auto_clean = $request->get_param( 'auto_cleanup' );
-        $auto_int   = $request->get_param( 'auto_cleanup_interval' );
-
-        if ( 'site' === $level && is_multisite() && class_exists( '\\NoComments\\Infrastructure\\OptionsRepository' ) && \NoComments\Infrastructure\OptionsRepository::is_enforced() ) {
-            return new \WP_Error( 'no_comments_network_enforced', __( 'Los ajustes del sitio están controlados por la red.', 'no-comments' ), [ 'status' => 409 ] );
-        }
-
-        if ( 'network' === $level && is_multisite() ) {
-            if ( ! current_user_can( 'manage_network_options' ) ) {
-                return new \WP_Error( 'no_comments_forbidden', __( 'Permisos insuficientes para ajustes de red.', 'no-comments' ), [ 'status' => 403 ] );
-            }
-            $net = self::get_network_settings();
-            if ( null !== $enabled ) { $net['enabled'] = $enabled ? 1 : 0; }
-            if ( null !== $rest )    { $net['rest']    = $rest ? 1 : 0; }
-            if ( null !== $xmlrpc )  { $net['xmlrpc']  = $xmlrpc ? 1 : 0; }
-            if ( null !== $woo )     { $net['woo']     = $woo ? 1 : 0; }
-            if ( null !== $enforce ) { $net['enforce'] = $enforce ? 1 : 0; }
-            update_site_option( self::OPTION_NETWORK, $net );
-        } else {
-            if ( null !== $enabled ) { update_option( self::OPTION_KEY, $enabled ? 1 : 0 ); }
-            if ( null !== $rest )    { update_option( self::OPTION_REST, $rest ? 1 : 0 ); }
-            if ( null !== $xmlrpc )  { update_option( self::OPTION_XMLRPC, $xmlrpc ? 1 : 0 ); }
-            if ( null !== $woo )     { update_option( self::OPTION_WOO, $woo ? 1 : 0 ); }
-            if ( null !== $exceptions ) {
-                $exceptions = is_array( $exceptions ) ? $exceptions : [ $exceptions ];
-                update_option( self::OPTION_EXCEPTIONS, array_values( array_unique( array_filter( array_map( 'sanitize_key', $exceptions ) ) ) ) );
-            }
-            if ( null !== $auto_close ) { update_option( self::OPTION_AUTO_CLOSE_DAYS, max( 0, (int) $auto_close ) ); }
-            if ( null !== $auto_clean ) { update_option( self::OPTION_AUTO_CLEANUP, $auto_clean ? 1 : 0 ); }
-            if ( null !== $auto_int && in_array( $auto_int, [ 'daily', 'twicedaily', 'weekly' ], true ) ) {
-                update_option( self::OPTION_AUTO_CLEANUP_INT, $auto_int );
-            }
-            self::maybe_schedule_cleanup();
-        }
-        return self::rest_get_settings( $request );
-    }
-
-    /**
-     * REST: POST actions/delete
-     */
-    public static function rest_delete( $request ) {
-        $scope    = $request->get_param( 'scope' ) ?: 'spam';
-        $types    = $request->get_param( 'types' );
-        $dry_run  = (bool) $request->get_param( 'dry_run' );
-        $strategy = $request->get_param( 'strategy' ) === 'trash' ? 'trash' : 'delete';
-        if ( is_string( $types ) ) {
-            $types = array_filter( array_map( 'sanitize_key', array_map( 'trim', explode( ',', $types ) ) ) );
-        }
-        if ( ! is_array( $types ) ) { $types = []; }
-
-        if ( $dry_run ) {
-            $count = self::count_comments_for_scope( $scope, $types );
-            return [ 'deleted' => $count, 'dry_run' => true, 'scope' => $scope, 'types' => $types ];
-        }
-        $deleted = self::delete_comments( $scope, $types, $strategy );
-        return [ 'deleted' => (int) $deleted, 'dry_run' => false, 'scope' => $scope, 'types' => $types, 'strategy' => $strategy ];
-    }
-
-    /** REST: exporta un snapshot completo de ajustes. */
-    public static function rest_export_settings( $request ) {
-        return self::get_export_payload();
-    }
-
-    /**
-     * REST: importa ajustes desde un payload JSON.
-     */
-    public static function rest_import_settings( $request ) {
-        $level    = $request->get_param( 'level' ) ?: 'site';
-        $settings = $request->get_param( 'settings' );
-
-        if ( 'network' === $level ) {
-            if ( ! is_multisite() ) {
-                return new \WP_Error( 'no_comments_not_multisite', __( 'Este sitio no es una red multisite.', 'no-comments' ), [ 'status' => 400 ] );
-            }
-            if ( ! current_user_can( 'manage_network_options' ) ) {
-                return new \WP_Error( 'no_comments_forbidden', __( 'Permisos insuficientes para ajustes de red.', 'no-comments' ), [ 'status' => 403 ] );
-            }
-        } elseif ( is_multisite() && class_exists( '\\NoComments\\Infrastructure\\OptionsRepository' ) && \NoComments\Infrastructure\OptionsRepository::is_enforced() ) {
-            return new \WP_Error( 'no_comments_network_enforced', __( 'Los ajustes del sitio están controlados por la red.', 'no-comments' ), [ 'status' => 409 ] );
-        }
-
-        if ( ! is_array( $settings ) ) {
-            return new \WP_Error( 'no_comments_invalid_payload', __( 'El payload de ajustes debe ser un objeto JSON.', 'no-comments' ), [ 'status' => 400 ] );
-        }
-
-        $applied = self::import_settings( $settings, $level );
-        return [
-            'applied'  => $applied,
-            'settings' => self::rest_get_settings( $request ),
-        ];
-    }
-
-    /**
-     * Devuelve ajustes de red (multisite).
-     *
-     * @return array{enforce:int,enabled:int,rest:int,xmlrpc:int,woo:int}
-     */
-    private static function get_network_settings() {
-        if ( class_exists( '\\NoComments\\Infrastructure\\OptionsRepository' ) ) {
-            return \NoComments\Infrastructure\OptionsRepository::get_network_settings();
-        }
-        return [ 'enforce' => 0, 'enabled' => 1, 'rest' => 1, 'xmlrpc' => 1, 'woo' => 0 ];
-    }
-
-    /** Toggles efectivos de REST/XML-RPC considerando red */
-    private static function get_rest_disabled() {
-        if ( class_exists( '\\NoComments\\Infrastructure\\OptionsRepository' ) ) {
-            return \NoComments\Infrastructure\OptionsRepository::effective_rest_disabled();
-        }
-        return (bool) get_option( self::OPTION_REST, 1 );
-    }
-    private static function get_xmlrpc_disabled() {
-        if ( class_exists( '\\NoComments\\Infrastructure\\OptionsRepository' ) ) {
-            return \NoComments\Infrastructure\OptionsRepository::effective_xmlrpc_disabled();
-        }
-        return (bool) get_option( self::OPTION_XMLRPC, 1 );
-    }
-
-    /** Página de ajustes de red (multisite) */
-    public static function add_network_settings_page() {
-        add_submenu_page(
-            'settings.php',
-            __( 'NO Comments (Network)', 'no-comments' ),
-            __( 'NO Comments', 'no-comments' ),
-            'manage_network_options',
-            self::PAGE_SLUG . '-network',
-            [ __CLASS__, 'render_network_settings_page' ]
+        register_setting(
+            self::SETTINGS_GROUP,
+            'no_comments_cleanup_post_types',
+            array(
+                'type'              => 'array',
+                'sanitize_callback' => array( $this, 'sanitize_post_types' ),
+                'default'           => array(),
+            )
         );
     }
 
-    public static function render_network_settings_page() {
-        if ( ! current_user_can( 'manage_network_options' ) ) {
+    public function sanitize_post_types( $value ) {
+        if ( ! is_array( $value ) ) {
+            return array();
+        }
+
+        return array_values( array_unique( array_filter( array_map( 'sanitize_key', $value ) ) ) );
+    }
+
+    public function sanitize_cleanup_interval( $value ) {
+        $allowed = array( 'daily', 'twicedaily', 'weekly' );
+        return in_array( $value, $allowed, true ) ? $value : 'daily';
+    }
+
+    public function sanitize_cleanup_scope( $value ) {
+        $allowed = array( 'spam', 'pending', 'trash', 'all' );
+        return in_array( $value, $allowed, true ) ? $value : 'spam';
+    }
+
+    public function sanitize_cleanup_strategy( $value ) {
+        return 'trash' === $value ? 'trash' : 'delete';
+    }
+
+    public function admin_menu() {
+        add_options_page(
+            'NO Comments',
+            'NO Comments',
+            'manage_options',
+            self::PAGE_SLUG,
+            array( $this, 'render_settings_page' )
+        );
+    }
+
+    public function render_settings_page() {
+        if ( ! current_user_can( 'manage_options' ) ) {
             return;
         }
-        $net = self::get_network_settings();
-        echo '<div class="wrap" id="no-comments-admin">';
-        echo '<h1>' . esc_html__( 'NO Comments (Network)', 'no-comments' ) . '</h1>';
-        if ( isset( $_GET['updated'] ) ) {
-            echo '<div class="updated notice"><p>' . esc_html__( 'Ajustes de red guardados.', 'no-comments' ) . '</p></div>';
-        }
-        $action = admin_url( 'admin-post.php' );
-        echo '<form method="post" action="' . esc_url( $action ) . '">';
-        wp_nonce_field( 'no_comments_network_save', '_wpnonce_no_comments_network' );
-        echo '<input type="hidden" name="action" value="no_comments_network_save" />';
 
-        echo '<table class="form-table"><tbody>';
+        $settings = $this->get_settings();
+        ?>
+        <div class="wrap">
+            <h1>NO Comments</h1>
+            <p>Deshabilitá comentarios y pings de forma global sin romper WooCommerce.</p>
 
-        echo '<tr><th scope="row">' . esc_html__( 'Forzar desde la Red', 'no-comments' ) . '</th><td>';
-        echo '<label><input type="hidden" name="enforce" value="0" />';
-        echo '<input type="checkbox" name="enforce" value="1" ' . checked( $net['enforce'], 1, false ) . ' /> ' . esc_html__( 'Aplicar estos ajustes a todos los sitios', 'no-comments' ) . '</label>';
-        echo '<p class="description">' . esc_html__( 'Cuando está activo, los sitios no podrán cambiar estos valores.', 'no-comments' ) . '</p>';
-        echo '</td></tr>';
-
-        echo '<tr><th scope="row">' . esc_html__( 'Estado global', 'no-comments' ) . '</th><td>';
-        echo '<label><input type="hidden" name="enabled" value="0" />';
-        echo '<input type="checkbox" name="enabled" value="1" ' . checked( $net['enabled'], 1, false ) . ' /> ' . esc_html__( 'Cerrar comentarios y pings en todo el network', 'no-comments' ) . '</label>';
-        echo '</td></tr>';
-
-        echo '<tr><th scope="row">APIs</th><td>';
-        echo '<label style="display:block"><input type="hidden" name="rest" value="0" />';
-        echo '<input type="checkbox" name="rest" value="1" ' . checked( $net['rest'], 1, false ) . ' /> ' . esc_html__( 'Deshabilitar endpoint REST de comentarios', 'no-comments' ) . '</label>';
-        echo '<label style="display:block"><input type="hidden" name="xmlrpc" value="0" />';
-        echo '<input type="checkbox" name="xmlrpc" value="1" ' . checked( $net['xmlrpc'], 1, false ) . ' /> ' . esc_html__( 'Deshabilitar XML‑RPC (wp.newComment)', 'no-comments' ) . '</label>';
-        echo '</td></tr>';
-
-        echo '<tr><th scope="row">' . esc_html__( 'Compatibilidad', 'no-comments' ) . '</th><td>';
-        echo '<label><input type="hidden" name="woo" value="0" />';
-        echo '<input type="checkbox" name="woo" value="1" ' . checked( $net['woo'], 1, false ) . ' /> ' . esc_html__( 'Mantener reseñas de productos (WooCommerce)', 'no-comments' ) . '</label>';
-        echo '</td></tr>';
-
-        echo '</tbody></table>';
-        submit_button( __( 'Guardar ajustes de red', 'no-comments' ) );
-        echo '</form>';
-        echo '</div>';
+            <form method="post" action="options.php">
+                <?php settings_fields( self::SETTINGS_GROUP ); ?>
+                <table class="form-table" role="presentation">
+                    <tr>
+                        <th scope="row">Deshabilitar comentarios</th>
+                        <td><label><input type="checkbox" name="<?php echo esc_attr( self::OPTION_KEY ); ?>" value="1" <?php checked( $settings['enabled'] ); ?>> Activado</label></td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Bloquear REST API de comentarios</th>
+                        <td><label><input type="checkbox" name="no_comments_disable_rest_api" value="1" <?php checked( $settings['rest_api'] ); ?>> Bloquear endpoints de comentarios</label></td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Bloquear XML-RPC comments</th>
+                        <td><label><input type="checkbox" name="no_comments_disable_xmlrpc" value="1" <?php checked( $settings['xmlrpc'] ); ?>> Bloquear wp.newComment</label></td>
+                    </tr>
+                    <tr>
+                        <th scope="row">WooCommerce</th>
+                        <td><label><input type="checkbox" name="no_comments_keep_wc_reviews" value="1" <?php checked( $settings['keep_wc_reviews'] ); ?>> Mantener reseñas de productos</label></td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Cerrar automáticamente</th>
+                        <td><input type="number" min="0" name="no_comments_auto_close_days" value="<?php echo esc_attr( $settings['auto_close_days'] ); ?>"> días (0 = desactivado)</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Limpieza automática</th>
+                        <td>
+                            <label><input type="checkbox" name="no_comments_cleanup_enabled" value="1" <?php checked( $settings['cleanup_enabled'] ); ?>> Activar</label><br>
+                            <select name="no_comments_cleanup_interval">
+                                <option value="daily" <?php selected( $settings['cleanup_interval'], 'daily' ); ?>>Diaria</option>
+                                <option value="twicedaily" <?php selected( $settings['cleanup_interval'], 'twicedaily' ); ?>>Dos veces al día</option>
+                                <option value="weekly" <?php selected( $settings['cleanup_interval'], 'weekly' ); ?>>Semanal</option>
+                            </select>
+                            <select name="no_comments_cleanup_scope">
+                                <option value="spam" <?php selected( $settings['cleanup_scope'], 'spam' ); ?>>Spam</option>
+                                <option value="pending" <?php selected( $settings['cleanup_scope'], 'pending' ); ?>>Pendientes</option>
+                                <option value="trash" <?php selected( $settings['cleanup_scope'], 'trash' ); ?>>Papelera</option>
+                                <option value="all" <?php selected( $settings['cleanup_scope'], 'all' ); ?>>Todos</option>
+                            </select>
+                            <select name="no_comments_cleanup_strategy">
+                                <option value="delete" <?php selected( $settings['cleanup_strategy'], 'delete' ); ?>>Borrar definitivamente</option>
+                                <option value="trash" <?php selected( $settings['cleanup_strategy'], 'trash' ); ?>>Mover a Papelera</option>
+                            </select>
+                        </td>
+                    </tr>
+                </table>
+                <?php submit_button(); ?>
+            </form>
+        </div>
+        <?php
     }
 
-    public static function handle_network_save() {
-        if ( ! current_user_can( 'manage_network_options' ) ) {
-            wp_die( esc_html__( 'Permisos insuficientes.', 'no-comments' ) );
+    public function maybe_apply_admin_policy() {
+        if ( ! $this->is_enabled() ) {
+            return;
         }
-        check_admin_referer( 'no_comments_network_save', '_wpnonce_no_comments_network' );
-        $data = [
-            'enforce' => isset( $_POST['enforce'] ) ? 1 : 0,
-            'enabled' => isset( $_POST['enabled'] ) ? 1 : 0,
-            'rest'    => isset( $_POST['rest'] ) ? 1 : 0,
-            'xmlrpc'  => isset( $_POST['xmlrpc'] ) ? 1 : 0,
-            'woo'     => isset( $_POST['woo'] ) ? 1 : 0,
-        ];
-        update_site_option( self::OPTION_NETWORK, $data );
-        wp_safe_redirect( network_admin_url( 'settings.php?page=' . self::PAGE_SLUG . '-network&updated=1' ) );
-        exit;
+
+        add_action( 'admin_menu', array( $this, 'remove_comment_admin_menu' ), 999 );
+        add_action( 'admin_bar_menu', array( $this, 'remove_comment_admin_bar' ), 999 );
+        add_action( 'current_screen', array( $this, 'redirect_comment_admin_screens' ) );
     }
 
-    /**
-     * Elimina comentarios según el alcance indicado.
-     *
-     * @param string $scope spam|pending|trash|all
-     * @return int Cantidad eliminada
-     */
-    public static function delete_comments( $scope, $types = [], $strategy = 'delete' ) {
-        if ( class_exists( '\\NoComments\\Application\\DeleteService' ) ) {
-            return \NoComments\Application\DeleteService::delete( $scope, (array) $types, $strategy );
+    public function maybe_apply_frontend_policy() {
+        if ( ! $this->is_enabled() ) {
+            return;
         }
-        // Fallback a la implementación previa si por alguna razón no se cargó el servicio
-        $count = get_comments( [ 'status' => 'all', 'count' => true ] );
-        return (int) $count; // Retorno mínimo para no romper ejecución
+
+        add_filter( 'comments_open', array( $this, 'filter_comments_open' ), 20, 2 );
+        add_filter( 'pings_open', array( $this, 'filter_comments_open' ), 20, 2 );
+        add_filter( 'comments_array', '__return_empty_array', 20, 2 );
+        add_filter( 'comments_template', array( $this, 'comments_template' ), 20 );
+        add_filter( 'feed_links_show_comments_feed', '__return_false' );
+        add_filter( 'rest_endpoints', array( $this, 'filter_rest_endpoints' ) );
+        add_filter( 'xmlrpc_methods', array( $this, 'filter_xmlrpc_methods' ) );
     }
 
-    /**
-     * Cuenta comentarios que serían afectados por un alcance dado (sin borrar).
-     *
-     * @param string $scope
-     * @return int
-     */
-    public static function count_comments_for_scope( $scope, $types = [] ) {
-        if ( class_exists( '\\NoComments\\Application\\DeleteService' ) ) {
-            return \NoComments\Application\DeleteService::count( $scope, (array) $types );
+    public function filter_comments_open( $open, $post_id = 0 ) {
+        if ( $this->is_exception_post_type( $post_id ) ) {
+            return $open;
         }
-        $c = wp_count_comments();
-        return (int) $c->total_comments;
+
+        return false;
+    }
+
+    public function comments_template( $template ) {
+        return plugin_dir_path( __FILE__ ) . 'includes/empty-comments.php';
+    }
+
+    public function filter_rest_endpoints( $endpoints ) {
+        if ( ! get_option( 'no_comments_disable_rest_api', false ) ) {
+            return $endpoints;
+        }
+
+        foreach ( array_keys( $endpoints ) as $route ) {
+            if ( 0 === strpos( $route, '/wp/v2/comments' ) ) {
+                unset( $endpoints[ $route ] );
+            }
+        }
+
+        return $endpoints;
+    }
+
+    public function filter_xmlrpc_methods( $methods ) {
+        if ( get_option( 'no_comments_disable_xmlrpc', false ) ) {
+            unset( $methods['wp.newComment'] );
+        }
+        return $methods;
+    }
+
+    public function remove_comment_admin_menu() {
+        remove_menu_page( 'edit-comments.php' );
+        remove_submenu_page( 'options-general.php', 'options-discussion.php' );
+    }
+
+    public function remove_comment_admin_bar( $wp_admin_bar ) {
+        $wp_admin_bar->remove_node( 'comments' );
+    }
+
+    public function redirect_comment_admin_screens() {
+        $screen = get_current_screen();
+        if ( ! $screen ) {
+            return;
+        }
+
+        if ( in_array( $screen->base, array( 'edit-comments', 'comment' ), true ) ) {
+            wp_safe_redirect( admin_url() );
+            exit;
+        }
+    }
+
+    public function is_exception_post_type( $post_id ) {
+        $post_type = get_post_type( $post_id );
+        if ( ! $post_type ) {
+            return false;
+        }
+
+        $exceptions = (array) get_option( 'no_comments_post_type_exceptions', array() );
+        if ( get_option( 'no_comments_keep_wc_reviews', true ) && 'product' === $post_type ) {
+            return true;
+        }
+
+        return in_array( $post_type, $exceptions, true );
+    }
+
+    public function maybe_apply_cleanup_schedule() {
+        if ( get_option( 'no_comments_cleanup_enabled', false ) ) {
+            if ( ! wp_next_scheduled( 'no_comments_cleanup_event' ) ) {
+                wp_schedule_event( time() + HOUR_IN_SECONDS, get_option( 'no_comments_cleanup_interval', 'daily' ), 'no_comments_cleanup_event' );
+            }
+        } else {
+            wp_clear_scheduled_hook( 'no_comments_cleanup_event' );
+        }
+    }
+
+    public function run_scheduled_cleanup() {
+        $scope    = (string) get_option( 'no_comments_cleanup_scope', 'spam' );
+        $strategy = (string) get_option( 'no_comments_cleanup_strategy', 'delete' );
+        $types    = (array) get_option( 'no_comments_cleanup_post_types', array() );
+
+        if ( class_exists( 'NoComments\\Application\\DeleteService' ) ) {
+            $service = new NoComments\Application\DeleteService();
+            $service->execute( $scope, $types, $strategy, false );
+        }
+    }
+
+    public function register_rest_routes() {
+        register_rest_route(
+            'no-comments/v1',
+            '/settings',
+            array(
+                array(
+                    'methods'             => 'GET',
+                    'callback'            => array( $this, 'rest_get_settings' ),
+                    'permission_callback' => array( $this, 'rest_can_manage' ),
+                ),
+                array(
+                    'methods'             => 'POST',
+                    'callback'            => array( $this, 'rest_update_settings' ),
+                    'permission_callback' => array( $this, 'rest_can_manage' ),
+                ),
+            )
+        );
+    }
+
+    public function rest_can_manage() {
+        return current_user_can( 'manage_options' );
+    }
+
+    public function rest_get_settings() {
+        return rest_ensure_response( $this->get_settings() );
+    }
+
+    public function rest_update_settings( WP_REST_Request $request ) {
+        $payload = (array) $request->get_json_params();
+        $allowed = array(
+            self::OPTION_KEY                  => 'rest_sanitize_boolean',
+            'no_comments_disable_rest_api'    => 'rest_sanitize_boolean',
+            'no_comments_disable_xmlrpc'      => 'rest_sanitize_boolean',
+            'no_comments_keep_wc_reviews'     => 'rest_sanitize_boolean',
+            'no_comments_auto_close_days'     => 'absint',
+        );
+
+        foreach ( $allowed as $key => $sanitizer ) {
+            if ( array_key_exists( $key, $payload ) ) {
+                update_option( $key, call_user_func( $sanitizer, $payload[ $key ] ) );
+            }
+        }
+
+        if ( array_key_exists( 'no_comments_post_type_exceptions', $payload ) ) {
+            update_option( 'no_comments_post_type_exceptions', $this->sanitize_post_types( $payload['no_comments_post_type_exceptions'] ) );
+        }
+
+        return rest_ensure_response( $this->get_settings() );
     }
 }
 
-No_Comments_Plugin::init();
+new No_Comments_Plugin();
 
-// WP-CLI commands
-if ( defined( 'WP_CLI' ) && WP_CLI ) {
-    /**
-     * Comandos CLI para NO Comments
-     */
-    class No_Comments_CLI_Command extends WP_CLI_Command {
-        /**
-         * Muestra el estado actual (efectivo, considerando multisite).
-         */
-        public function status() {
-            $s = No_Comments_Plugin::get_status();
-            WP_CLI::log( 'enabled = ' . ( $s['enabled'] ? '1' : '0' ) );
-            WP_CLI::log( 'rest = ' . ( $s['rest'] ? '1' : '0' ) );
-            WP_CLI::log( 'xmlrpc = ' . ( $s['xmlrpc'] ? '1' : '0' ) );
-            WP_CLI::log( 'woo_reviews = ' . ( $s['woo'] ? '1' : '0' ) );
-            if ( $s['network_enforced'] ) {
-                WP_CLI::log( 'network = enforced' );
-            }
-        }
-        /**
-         * Activa el bloqueo global de comentarios.
-         */
-        public function enable() {
-            update_option( No_Comments_Plugin::OPTION_KEY, 1 );
-            WP_CLI::success( 'Comentarios deshabilitados globalmente.' );
-        }
-        /**
-         * Desactiva el bloqueo global de comentarios.
-         */
-        public function disable() {
-            update_option( No_Comments_Plugin::OPTION_KEY, 0 );
-            WP_CLI::success( 'Comentarios restaurados al comportamiento normal.' );
-        }
-        /**
-         * Borra comentarios.
-         *
-         * ## OPTIONS
-         *
-         * [--scope=<scope>]
-         * : spam|pending|trash|all (por defecto: spam)
-         *
-         * [--types=<types>]
-         * : lista separada por comas de tipos de post a limitar (ej: post,page,product)
-         *
-         * [--strategy=<strategy>]
-         * : delete (definitivo) o trash (papelera, cuando aplique). Por defecto: delete.
-         *
-         * [--dry-run]
-         * : calcula cuántos se borrarían sin ejecutar el borrado.
-         *
-         * ## EXAMPLES
-         *
-         * wp no-comments delete --scope=all
-         * wp no-comments delete --scope=spam --dry-run
-         * wp no-comments delete --scope=all --types=post,page
-         * wp no-comments delete --scope=pending --strategy=trash
-         */
-        public function delete( $args, $assoc_args ) {
-            $scope    = isset( $assoc_args['scope'] ) ? $assoc_args['scope'] : 'spam';
-            $dryrun   = ! empty( $assoc_args['dry-run'] );
-            $strategy = isset( $assoc_args['strategy'] ) && 'trash' === $assoc_args['strategy'] ? 'trash' : 'delete';
-            $types    = [];
-            if ( ! empty( $assoc_args['types'] ) ) {
-                $parts = array_map( 'trim', explode( ',', $assoc_args['types'] ) );
-                foreach ( $parts as $t ) {
-                    if ( $t !== '' ) { $types[] = sanitize_key( $t ); }
-                }
-                $types = array_values( array_unique( $types ) );
-            }
-
-            if ( $dryrun ) {
-                $count = No_Comments_Plugin::count_comments_for_scope( $scope, $types );
-                WP_CLI::log( sprintf( 'DRY-RUN: se borrarían %d comentarios (alcance: %s%s).', $count, $scope, empty( $types ) ? '' : ', types=' . implode( ',', $types ) ) );
-                return;
-            }
-
-            $deleted = No_Comments_Plugin::delete_comments( $scope, $types, $strategy );
-            WP_CLI::success( sprintf( 'Eliminados %d comentarios (alcance: %s%s%s).', $deleted, $scope, empty( $types ) ? '' : ', types=' . implode( ',', $types ), ', strategy=' . $strategy ) );
-        }
-
-        /**
-         * Exporta o importa los ajustes del plugin.
-         *
-         * ## OPTIONS
-         *
-         * <accion>
-         * : export|import
-         *
-         * [<archivo>]
-         * : Para import: ruta del JSON a importar. Para export: ruta de salida (alternativa a --file).
-         *
-         * [--file=<file>]
-         * : Ruta de salida del export. Si no se indica, el JSON se imprime por stdout.
-         *
-         * ## EXAMPLES
-         *
-         * wp no-comments settings export
-         * wp no-comments settings export --file=no-comments.json
-         * wp no-comments settings import no-comments.json
-         */
-        public function settings( $args, $assoc_args ) {
-            $action = isset( $args[0] ) ? strtolower( $args[0] ) : '';
-
-            if ( 'export' === $action ) {
-                $json = wp_json_encode( No_Comments_Plugin::get_export_payload(), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
-                $file = isset( $assoc_args['file'] ) ? $assoc_args['file'] : ( isset( $args[1] ) ? $args[1] : '' );
-                if ( $file ) {
-                    // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Export local indicado por el operador.
-                    if ( false === file_put_contents( $file, $json . PHP_EOL ) ) {
-                        WP_CLI::error( sprintf( 'No se pudo escribir en %s.', $file ) );
-                    }
-                    WP_CLI::success( 'Ajustes exportados a ' . $file );
-                } else {
-                    WP_CLI::log( $json );
-                }
-                return;
-            }
-
-            if ( 'import' === $action ) {
-                $file = isset( $args[1] ) ? $args[1] : '';
-                if ( ! $file || ! is_file( $file ) ) {
-                    WP_CLI::error( 'Indicá la ruta del archivo JSON: wp no-comments settings import <archivo>.' );
-                }
-                // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Lectura de archivo local indicado por el operador.
-                $raw  = file_get_contents( $file );
-                $data = is_string( $raw ) ? json_decode( $raw, true ) : null;
-                if ( ! is_array( $data ) ) {
-                    WP_CLI::error( 'El archivo debe ser un JSON válido exportado por NO Comments.' );
-                }
-                $applied = No_Comments_Plugin::import_settings( $data, 'site' );
-                WP_CLI::success( 'Ajustes importados. Aplicados: site=[' . implode( ', ', $applied['site'] ) . '], network=[' . implode( ', ', $applied['network'] ) . '].' );
-                return;
-            }
-
-            WP_CLI::error( 'Uso: wp no-comments settings export [--file=<ruta>] | wp no-comments settings import <archivo>.' );
-        }
-
-        /**
-         * Controla la limpieza automática de spam.
-         *
-         * ## OPTIONS
-         *
-         * <accion>
-         * : status|run|enable|disable
-         *
-         * [--interval=<interval>]
-         * : daily|twicedaily|weekly (solo con enable; por defecto: daily)
-         *
-         * ## EXAMPLES
-         *
-         * wp no-comments cleanup status
-         * wp no-comments cleanup enable --interval=weekly
-         * wp no-comments cleanup run
-         * wp no-comments cleanup disable
-         */
-        public function cleanup( $args, $assoc_args ) {
-            $action = isset( $args[0] ) ? strtolower( $args[0] ) : 'status';
-
-            if ( 'run' === $action ) {
-                $deleted = No_Comments_Plugin::run_cleanup();
-                WP_CLI::success( sprintf( 'Limpieza ejecutada: %d comentarios de spam eliminados.', $deleted ) );
-                return;
-            }
-
-            if ( 'enable' === $action ) {
-                update_option( No_Comments_Plugin::OPTION_AUTO_CLEANUP, 1 );
-                if ( isset( $assoc_args['interval'] ) && in_array( $assoc_args['interval'], [ 'daily', 'twicedaily', 'weekly' ], true ) ) {
-                    update_option( No_Comments_Plugin::OPTION_AUTO_CLEANUP_INT, $assoc_args['interval'] );
-                }
-                No_Comments_Plugin::maybe_schedule_cleanup();
-                WP_CLI::success( 'Limpieza automática activada (' . No_Comments_Plugin::auto_cleanup_interval() . ').' );
-                return;
-            }
-
-            if ( 'disable' === $action ) {
-                update_option( No_Comments_Plugin::OPTION_AUTO_CLEANUP, 0 );
-                No_Comments_Plugin::maybe_schedule_cleanup();
-                WP_CLI::success( 'Limpieza automática desactivada.' );
-                return;
-            }
-
-            // status
-            $last = get_option( No_Comments_Plugin::OPTION_LAST_CLEANUP, [] );
-            $spam = No_Comments_Plugin::count_comments_for_scope( 'spam' );
-            WP_CLI::log( 'enabled = ' . ( No_Comments_Plugin::auto_cleanup_enabled() ? '1' : '0' ) );
-            WP_CLI::log( 'interval = ' . No_Comments_Plugin::auto_cleanup_interval() );
-            WP_CLI::log( 'spam_count = ' . $spam );
-            if ( is_array( $last ) && ! empty( $last['time'] ) ) {
-                WP_CLI::log( 'last_run = ' . $last['time'] . ' (deleted: ' . (int) $last['deleted'] . ')' );
-            } else {
-                WP_CLI::log( 'last_run = nunca' );
-            }
-        }
-
-        /**
-         * Gestiona las excepciones por tipo de contenido.
-         *
-         * ## OPTIONS
-         *
-         * <accion>
-         * : list|add|remove
-         *
-         * [<tipo>]
-         * : Post type (con add/remove).
-         *
-         * ## EXAMPLES
-         *
-         * wp no-comments exceptions list
-         * wp no-comments exceptions add page
-         * wp no-comments exceptions remove page
-         */
-        public function exceptions( $args ) {
-            $action  = isset( $args[0] ) ? strtolower( $args[0] ) : 'list';
-            $current = get_option( No_Comments_Plugin::OPTION_EXCEPTIONS, [] );
-            if ( ! is_array( $current ) ) {
-                $current = [];
-            }
-
-            if ( 'list' === $action ) {
-                WP_CLI::log( 'Excepciones: ' . ( $current ? implode( ', ', $current ) : '(ninguna)' ) );
-                return;
-            }
-
-            $type = isset( $args[1] ) ? sanitize_key( $args[1] ) : '';
-            if ( 'add' === $action ) {
-                if ( ! $type || ! post_type_exists( $type ) ) {
-                    WP_CLI::error( 'Indicá un post type válido: wp no-comments exceptions add <tipo>.' );
-                }
-                if ( ! in_array( $type, $current, true ) ) {
-                    $current[] = $type;
-                    update_option( No_Comments_Plugin::OPTION_EXCEPTIONS, $current );
-                }
-                WP_CLI::success( 'Excepción agregada: ' . $type );
-                return;
-            }
-
-            if ( 'remove' === $action ) {
-                $current = array_values( array_diff( $current, [ $type ] ) );
-                update_option( No_Comments_Plugin::OPTION_EXCEPTIONS, $current );
-                WP_CLI::success( $type ? ( 'Excepción removida: ' . $type ) : 'Excepciones actualizadas.' );
-                return;
-            }
-
-            WP_CLI::error( 'Uso: wp no-comments exceptions list|add <tipo>|remove <tipo>.' );
-        }
-
-        /**
-         * Configura el cierre automático por antigüedad.
-         *
-         * ## OPTIONS
-         *
-         * [<dias|status|off>]
-         * : Cantidad de días (0 = off, status muestra el valor actual).
-         *
-         * ## EXAMPLES
-         *
-         * wp no-comments auto-close 30
-         * wp no-comments auto-close off
-         * wp no-comments auto-close status
-         */
-        public function auto_close( $args ) {
-            $value = isset( $args[0] ) ? strtolower( $args[0] ) : 'status';
-
-            if ( 'status' === $value ) {
-                WP_CLI::log( 'auto_close_days = ' . No_Comments_Plugin::auto_close_days() );
-                return;
-            }
-            if ( 'off' === $value ) {
-                update_option( No_Comments_Plugin::OPTION_AUTO_CLOSE_DAYS, 0 );
-                WP_CLI::success( 'Cierre automático desactivado.' );
-                return;
-            }
-
-            $days = (int) $value;
-            if ( $days < 0 ) {
-                WP_CLI::error( 'Indicá un número de días (0 o más): wp no-comments auto-close 30.' );
-            }
-            update_option( No_Comments_Plugin::OPTION_AUTO_CLOSE_DAYS, $days );
-            WP_CLI::success( 'Cierre automático configurado: ' . $days . ' días.' );
-        }
-
-        /**
-         * Controla la compatibilidad con reseñas de WooCommerce (mantener/estado).
-         *
-         * ## OPTIONS
-         *
-         * <accion>
-         * : on|off|status (por defecto: status)
-         *
-         * ## EXAMPLES
-         *
-         * wp no-comments woo-reviews on
-         * wp no-comments woo-reviews off
-         * wp no-comments woo-reviews status
-         */
-        public function woo_reviews( $args ) {
-            $action = isset( $args[0] ) ? strtolower( $args[0] ) : 'status';
-            if ( 'on' === $action ) {
-                update_option( No_Comments_Plugin::OPTION_WOO, 1 );
-                WP_CLI::success( 'Compatibilidad WooCommerce: mantener reseñas = ON' );
-                return;
-            }
-            if ( 'off' === $action ) {
-                update_option( No_Comments_Plugin::OPTION_WOO, 0 );
-                WP_CLI::success( 'Compatibilidad WooCommerce: mantener reseñas = OFF' );
-                return;
-            }
-            $val = (bool) get_option( No_Comments_Plugin::OPTION_WOO, 0 );
-            WP_CLI::log( 'Compatibilidad WooCommerce (mantener reseñas) = ' . ( $val ? 'ON' : 'OFF' ) );
-        }
-    }
-    WP_CLI::add_command( 'no-comments', 'No_Comments_CLI_Command' );
-}
-
-endif; // class exists
+endif;
