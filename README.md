@@ -148,19 +148,21 @@ NO Comments **no** recopila telemetría, **no** crea cuentas externas, **no** ll
 
 ---
 
-## Ecosistema Akela
+## Akela WordPress
 
-NO Comments forma parte de una familia de herramientas para **WordPress, automatización y agentes de IA**, construidas para operar en entornos reales de producción.
+> **Production-grade WordPress infrastructure for performance, SEO, automation and AI agents.**
 
-### WordPress & AI infrastructure
+NO Comments forma parte de la familia **Akela WordPress**:
 
-- **[WP-Nerve](https://github.com/akelaonline/WP-Nerve)** — control layer nativo para agentes y WordPress.
+- **[WP-Nerve](https://github.com/akelaonline/WP-Nerve)** — native control layer / MCP gateway para agentes y WordPress.
 - **Akela SEO** — SEO técnico y automatizable para WordPress.
-- **PageRelay** — puente entre flujos de IA y páginas WordPress editables.
-- **NO Comments** — cierre y limpieza integral de comentarios, con REST y WP-CLI.
+- **PageRelay** — AI-to-WordPress deployment layer para páginas nativas, editables y reversibles.
+- **[NO Comments](https://github.com/akelaonline/No-comments)** — cierre y limpieza integral de comentarios, con REST y WP-CLI.
 - **Tucho Performance** — performance, caché y optimización WordPress 100% local.
 
-### Business & AI ecosystem
+Los productos son independientes, pero comparten los mismos principios: **self-hosted cuando importa, APIs explícitas, seguridad por diseño, observabilidad y operación real en producción.**
+
+### Professional ecosystem
 
 - **[MKT Marketing Digital](https://mktmarketingdigital.com)** — agencia de marketing digital, implementación y growth.
 - **[The Thing](https://thethingapp.com)** — producto de MKT para atención y ventas con IA.
