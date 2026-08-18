@@ -150,18 +150,42 @@ NO Comments **no** recopila telemetría, **no** crea cuentas externas, **no** ll
 
 ## Ecosistema Akela
 
-Plugin creado y mantenido por **Akela** ([@akelaonline](https://github.com/akelaonline)) — desarrollo WordPress orientado a SEO y rendimiento:
+NO Comments forma parte de una familia de herramientas para **WordPress, automatización y agentes de IA**, construidas para operar en entornos reales de producción.
 
-- **Akela SEO** — SEO técnico completo para sitios editoriales y e-commerce.
-- **Tucho Performance** — caché y optimización de rendimiento, 100% local.
+### WordPress & AI infrastructure
 
-[![GitHub](https://img.shields.io/badge/GitHub-akelaonline-111827)](https://github.com/akelaonline)
-[![Instagram](https://img.shields.io/badge/Instagram-%40akelaonline-E4405F)](https://www.instagram.com/akelaonline/)
+- **[WP-Nerve](https://github.com/akelaonline/WP-Nerve)** — control layer nativo para agentes y WordPress.
+- **Akela SEO** — SEO técnico y automatizable para WordPress.
+- **PageRelay** — puente entre flujos de IA y páginas WordPress editables.
+- **NO Comments** — cierre y limpieza integral de comentarios, con REST y WP-CLI.
+- **Tucho Performance** — performance, caché y optimización WordPress 100% local.
 
-## Soporte
+### Business & AI ecosystem
 
-- Reportá bugs y proponé mejoras en [GitHub Issues](https://github.com/akelaonline/No-comments/issues).
-- Para vulnerabilidades de seguridad, seguí [SECURITY.md](SECURITY.md) (reporte privado).
+- **[MKT Marketing Digital](https://mktmarketingdigital.com)** — agencia de marketing digital, implementación y growth.
+- **[The Thing](https://thethingapp.com)** — producto de MKT para atención y ventas con IA.
+- **[Marketing Digital Experience](https://marketingdigitalexperience.com)** — consultoría, formación y transferencia de conocimiento en IA aplicada.
+- **[Nubelytics](https://nubelytics.com)** — analytics + AI para ecommerce.
+- **[Zantal](https://zantal.ai)** — agentic commerce intelligence.
+
+---
+
+## Autor, soporte y contacto
+
+Built by **Alejandro Daniel José · Akela**.
+
+[![GitHub](https://img.shields.io/badge/GitHub-akelaonline-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/akelaonline)
+[![Instagram](https://img.shields.io/badge/Instagram-%40akelaonline-E4405F?style=for-the-badge&logo=instagram&logoColor=white)](https://www.instagram.com/akelaonline/)
+[![MKT](https://img.shields.io/badge/MKT-Marketing_Digital-4285F4?style=for-the-badge)](https://mktmarketingdigital.com)
+[![MDE](https://img.shields.io/badge/MDE-AI_Consulting-111111?style=for-the-badge&logo=openai&logoColor=white)](https://marketingdigitalexperience.com)
+[![Email](https://img.shields.io/badge/Email-alejandro%40mktmarketingdigital.com-0A66C2?style=for-the-badge&logo=gmail&logoColor=white)](mailto:alejandro@mktmarketingdigital.com)
+
+- Para bugs y mejoras técnicas: [GitHub Issues](https://github.com/akelaonline/No-comments/issues).
+- Para vulnerabilidades: [SECURITY.md](SECURITY.md).
+- Para implementación, integraciones o trabajo profesional: [MKT Marketing Digital](https://mktmarketingdigital.com).
+- Para consultoría y capacitación en IA: [Marketing Digital Experience](https://marketingdigitalexperience.com).
+
+---
 
 ## Licencia
 
